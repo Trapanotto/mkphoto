@@ -14,7 +14,7 @@ export const CRITERIA = [
 ];
 
 export function starsFor(score) {
-  return score >= 85 ? 3 : score >= 70 ? 2 : score >= 50 ? 1 : 0;
+  return score >= 90 ? 3 : score >= 75 ? 2 : score >= 55 ? 1 : 0;
 }
 
 // Bild vom Canvas holen (direkt nach dem Rendern aufrufen)
@@ -68,7 +68,7 @@ export function evaluate(mission, ctx) {
     const dist = dir.length();
     dir.divideScalar(dist);
     ray.set(camPos, dir);
-    ray.far = dist - 1.0;
+    ray.far = dist - Math.max(1.0, dist * 0.03); // Toleranz bei grossen Distanzen (Berggrate)
     const hits = ray.intersectObjects(ctx.occluders, true);
     const blocked = hits.find((h) => !isPartOf(h.object, subj.root) && !(h.object.userData.isBuilding && isHiddenPoint(h.point)));
     if (blocked) continue;
@@ -83,8 +83,8 @@ export function evaluate(mission, ctx) {
 
   const s = {};
   // 1) Motiv: wie viel des Motivs ist im Bild und frei sichtbar
-  const needed = mission.coverage ?? 0.7;
-  s.subject = 20 * clamp01(visFrac / needed);
+  const needed = Math.min(0.95, (mission.coverage ?? 0.7) + 0.15);
+  s.subject = 20 * clamp01(visFrac / needed) ** 1.5;
 
   // 2) Bildaufbau: Füllgrad + Platzierung (Mitte oder Drittel)
   let framing = 0;
@@ -92,14 +92,17 @@ export function evaluate(mission, ctx) {
     const bw = (maxX - minX) / 2, bh = (maxY - minY) / 2;
     const fill = Math.max(bw, bh);
     const [lo, hi] = mission.fill || [0.35, 0.85];
-    const fillScore = fill < lo ? clamp01(fill / lo) ** 1.5 : fill > hi ? clamp01(1 - (fill - hi) / 0.4) : 1;
+    // ideal: Mitte des Bereichs; voller Wert nur nahe am Ideal
+    const ideal = (lo + hi) / 2, tolF = (hi - lo) / 4;
+    const dev = Math.max(0, Math.abs(fill - ideal) - tolF);
+    const fillScore = clamp01(1 - dev / (tolF + 0.25)) ** 1.3;
     const cx = sx / visible, cy = sy / visible;
     const anchors = [[0, 0], [-1 / 3, 1 / 3], [1 / 3, 1 / 3], [-1 / 3, -1 / 3], [1 / 3, -1 / 3], [-1 / 3, 0], [1 / 3, 0]];
     let best = 9;
     for (const [ax, ay] of anchors) best = Math.min(best, Math.hypot(cx - ax, cy - ay));
-    const placeScore = clamp01(1 - (best - 0.08) / 0.35);
+    const placeScore = clamp01(1 - (best - 0.05) / 0.22);
     // abgeschnittenes Motiv kostet
-    const cut = frameFrac < 0.98 && fill > 0.7 ? 0.8 : 1;
+    const cut = frameFrac < 0.97 ? 0.7 + 0.3 * frameFrac ** 4 : 1;
     framing = 20 * (0.55 * fillScore + 0.45 * placeScore) * cut;
   }
   s.framing = framing;
@@ -113,23 +116,23 @@ export function evaluate(mission, ctx) {
   if (mission.az) {
     const [c, tol] = mission.az;
     const d = angDiff(az, c);
-    angle *= d <= tol ? 1 : clamp01(1 - (d - tol) / 35);
+    angle *= d <= tol ? 1 - 0.15 * (d / tol) ** 2 : clamp01(0.85 - (d - tol) / 20);
   }
   if (mission.elev) {
     const [emin, emax] = mission.elev;
     const d = el < emin ? emin - el : el > emax ? el - emax : 0;
-    angle *= clamp01(1 - d / 20);
+    angle *= clamp01(1 - d / 12);
   }
   if (mission.dist) {
     const dist = v.length();
     const [dmin, dmax] = mission.dist;
     const d = dist < dmin ? (dmin - dist) / dmin : dist > dmax ? (dist - dmax) / dmax : 0;
-    angle *= clamp01(1 - d * 1.5);
+    angle *= clamp01(1 - d * 2.5);
   }
   s.angle = 20 * angle * (visible >= 3 ? 1 : 0);
 
   // 4) Schärfe
-  s.sharp = 20 * clamp01(1 - ctx.blur) * (visible >= 3 ? 1 : 0.3);
+  s.sharp = 20 * clamp01(1 - ctx.blur) ** 1.5 * (visible >= 3 ? 1 : 0.3);
 
   // 5) Licht: Gegenlicht kostet (ausser der Auftrag will es)
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));

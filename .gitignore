@@ -5,3 +5,4 @@ tools/blender/__pycache__/
 tools/blender/models/__pycache__/
 .claude/
 tools/blender/tex/
+.env

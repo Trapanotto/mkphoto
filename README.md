@@ -71,3 +71,40 @@ src/photo.js    Foto aufnehmen + bewerten
 src/levels.js   Orte, Wahrzeichen, Aufträge
 src/sound.js    synthetische Klänge
 ```
+
+## Neu in Version 2
+
+- **Stabilisierung:** GPS-Positionshaltung mit Windausgleich, 3-Achsen-Gimbal (Horizont immer gerade), Flugmodi Cine / Normal / Sport (Tasten 1/2/3 oder C) und Stativ (T), weiche Stick-Kurven, geglättete Maus.
+- **Modelle Detailstufe 2:** echte Fenster mit Rahmen, Simsen und Bögen, Masswerk, Fialen mit Krabben, Strebebögen, Sparren, Geranien, Lukarnen; heutige Kettenbrücke (Pont Neuf, Betonbögen).
+- **Fototexturen (CC0, Poly Haven):** 22 Materialsets mit Farbe, Relief und Rauheit, 1K für Desktop, 512 für Handys (`node tools/fetch-textures.mjs` + `node tools/compress-textures.mjs`).
+- **Umgebung:** Bäume aus swisstopo-Vegetation, Fassaden-Shader mit Putz/Sandstein, Fenstern und Dachziegelstruktur, spiegelndes Wasser, weiche Kontaktschatten (N8AO), Schatten rund um die Drohne, Tageszeit (Morgen / Mittag / Goldene Stunde).
+- **Gameplay:** Flugschule, Zielmarke mit Randpfeil und Geister-Rahmen (H), Minikarte, strengere Bewertung (Sterne ab 55 / 75 / 90), Verfolgeransicht mit Bild-im-Bild (V).
+- **Technik:** Qualitätsstufen Niedrig / Mittel / Hoch, installierbar als App (PWA, Offline-Cache), Sprachen DE / FR / IT / EN, Bestenliste.
+
+## Online-Bestenliste (optional, Supabase)
+
+Ohne Konfiguration speichert die Bestenliste lokal im Browser. Für eine gemeinsame Online-Liste:
+
+1. Kostenloses Projekt auf supabase.com anlegen.
+2. Im SQL-Editor ausführen:
+
+```sql
+create table scores (
+  id bigint generated always as identity primary key,
+  name text not null check (char_length(name) <= 24),
+  level text not null,
+  mission text not null,
+  score int not null check (score between 0 and 100),
+  created_at timestamptz default now()
+);
+alter table scores enable row level security;
+create policy "lesen" on scores for select using (true);
+create policy "eintragen" on scores for insert with check (true);
+```
+
+3. Datei `.env` anlegen (bzw. als GitHub-Secrets im Workflow setzen):
+
+```
+VITE_SUPABASE_URL=https://<projekt>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key>
+```

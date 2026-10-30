@@ -23,6 +23,7 @@ await page.waitForFunction(() => window.__mk);
 for (const [id, v] of Object.entries(VIEWS)) {
   if (process.argv.length > 2 && !process.argv.includes(id)) continue;
   await page.evaluate(async ([id, v]) => {
+    localStorage.setItem('mkphoto.v1', JSON.stringify({ best: {}, tutorialDone: true }));
     const L = __mk.LEVELS.find((l) => l.id === id);
     __mk.startLevel(L);
     await new Promise((r) => { const i = setInterval(() => { if (document.querySelector('#hud').classList.contains('active')) { clearInterval(i); r(); } }, 300); });

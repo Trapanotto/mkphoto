@@ -8,7 +8,7 @@ const BLENDER = process.env.BLENDER || [
   'blender',
 ].find((p) => p === 'blender' || existsSync(p));
 
-const ALL = ['kapellbruecke', 'kettenbruecke', 'muenster', 'bundeshaus', 'lenzburg', 'chillon', 'hoernlihuette'];
+const ALL = ['drohne', 'kapellbruecke', 'kettenbruecke', 'muenster', 'bundeshaus', 'lenzburg', 'chillon', 'hoernlihuette'];
 const names = process.argv.slice(2).length ? process.argv.slice(2) : ALL;
 let failed = 0;
 for (const n of names) {

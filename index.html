@@ -4,8 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>MKPHOTO</title>
   <link rel="icon" href="logo.svg" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -16,18 +20,24 @@
     <div class="title-inner">
       <img src="logo.svg" class="logo" alt="MK" />
       <h1>MKPHOTO</h1>
-      <p class="tag">Drohnenfotografie über der Schweiz</p>
-      <button id="btnPlay" class="primary">Spielen</button>
-      <button id="btnHelp" class="ghost">Steuerung</button>
+      <p class="tag" data-i18n="tagline"></p>
+      <button id="btnPlay" class="primary" data-i18n="play"></button>
+      <div class="row center">
+        <button id="btnSchool" class="ghost" data-i18n="flightSchool"></button>
+        <button id="btnHelp" class="ghost" data-i18n="controls"></button>
+        <button id="btnSettings" class="ghost" data-i18n="settings"></button>
+        <button id="btnBoard" class="ghost" data-i18n="leaderboard"></button>
+      </div>
+      <button id="btnInstall" class="ghost small hidden" data-i18n="install"></button>
     </div>
-    <footer class="credit">Geodaten © swisstopo · geo.admin.ch</footer>
+    <footer class="credit" data-i18n="attrib"></footer>
   </section>
 
   <!-- Levelauswahl -->
   <section id="levels" class="screen">
     <header class="bar">
       <button class="ghost back" data-goto="title">‹</button>
-      <h2>Ort wählen</h2>
+      <h2 data-i18n="chooseLocation"></h2>
       <span id="totalStars" class="stars-total"></span>
     </header>
     <div id="levelGrid" class="grid"></div>
@@ -42,21 +52,33 @@
     <div class="brief">
       <p id="briefPlace" class="muted"></p>
       <ol id="briefMissions" class="missions"></ol>
-      <p class="muted small">Akku: 6 Minuten · Speicherkarte: 24 Fotos · max. 120 m über Grund</p>
-      <button id="btnStart" class="primary">Abheben</button>
+      <div class="tod">
+        <span class="muted small" data-i18n="timeOfDay"></span>
+        <div class="seg" id="todSeg">
+          <button data-tod="morning" data-i18n="morning"></button>
+          <button data-tod="noon" data-i18n="noon"></button>
+          <button data-tod="evening" data-i18n="evening"></button>
+        </div>
+      </div>
+      <p class="muted small" data-i18n="briefInfo"></p>
+      <button id="btnStart" class="primary" data-i18n="takeoff"></button>
     </div>
   </section>
 
   <!-- Laden -->
   <section id="loading" class="screen">
     <img src="logo.svg" class="logo small pulse" alt="" />
-    <p id="loadText">Lade Geodaten …</p>
+    <p id="loadText"></p>
     <div class="progress"><div id="loadBar"></div></div>
-    <p class="muted small">swissALTI3D · SWISSIMAGE · swissBUILDINGS3D</p>
+    <p class="muted small">swissALTI3D · SWISSIMAGE · swissBUILDINGS3D · Vegetation</p>
   </section>
 
   <!-- HUD -->
   <section id="hud" class="hud">
+    <div id="ghostIdeal" class="ghost-ideal hidden"></div>
+    <div id="ghostBox" class="ghost-box hidden"></div>
+    <div id="ghostOk" class="ghost-ok hidden" data-i18n="onTarget"></div>
+    <div id="targetArrow" class="target-arrow hidden"><i></i><span id="targetDist"></span></div>
     <div class="hud-top">
       <div class="hud-tl">
         <div id="hudPlace" class="chip"></div>
@@ -64,15 +86,26 @@
       </div>
       <div class="compass"><div id="compassTape"></div><div class="compass-mark"></div></div>
       <div class="hud-tr">
-        <div class="chip"><span id="hudBattery">100%</span> 🔋</div>
-        <div class="chip"><span id="hudShots">0/24</span> 📷</div>
-        <button id="btnPause" class="chip btn">❚❚</button>
+        <div class="hud-tr-row">
+          <div class="chip"><span id="hudBattery">100%</span> 🔋</div>
+          <div class="chip"><span id="hudShots">0/24</span> 📷</div>
+          <button class="chip btn" id="hudMode">Normal</button>
+          <button id="btnPause" class="chip btn">❚❚</button>
+        </div>
+        <canvas id="minimap" class="minimap"></canvas>
       </div>
     </div>
     <div id="frame" class="frame"><i></i><i></i><i></i><i></i></div>
     <div id="grid3" class="grid3 hidden"></div>
-    <div id="nofly" class="warn hidden">⚠ Flugverbotszone</div>
+    <div id="pip" class="pip hidden"><span>📷</span></div>
+    <div id="nofly" class="warn hidden" data-i18n="noFly"></div>
     <div id="toast" class="toast"></div>
+    <div id="tutorial" class="tutorial hidden">
+      <b data-i18n="flightSchool"></b>
+      <p class="tut-text"></p>
+      <div class="tut-bar"><i></i></div>
+      <button class="tut-skip ghost small" data-i18n="skip"></button>
+    </div>
     <div class="hud-bl">
       <div><b id="hudH">0</b><small>m H</small></div>
       <div><b id="hudD">0</b><small>m D</small></div>
@@ -84,46 +117,48 @@
     </div>
     <div class="gimbal-scale"><div id="gimbalDot"></div></div>
     <div id="flash" class="flash"></div>
-    <div class="attrib">Geodaten © swisstopo</div>
-    <div id="lockHint" class="lock-hint">Klicken zum Steuern · Esc = Pause</div>
+    <div class="attrib" data-i18n="attrib"></div>
+    <div id="lockHint" class="lock-hint" data-i18n="lockHint"></div>
   </section>
 
   <!-- Touch-Steuerung -->
   <section id="touch" class="touch hidden">
-    <div id="stickL" class="stick left"><div class="knob"></div><span>Höhe / Drehen</span></div>
-    <div id="stickR" class="stick right"><div class="knob"></div><span>Fliegen</span></div>
+    <div id="stickL" class="stick left"><div class="knob"></div><span data-i18n="stickL"></span></div>
+    <div id="stickR" class="stick right"><div class="knob"></div><span data-i18n="stickR"></span></div>
     <button id="shutterBtn" class="shutter" aria-label="Foto"></button>
     <div class="side-btns">
-      <button id="gimUp">▲<small>Kamera</small></button>
-      <button id="gimDown">▼<small>Kamera</small></button>
+      <button id="gimUp">▲<small data-i18n="camera"></small></button>
+      <button id="gimDown">▼<small data-i18n="camera"></small></button>
       <button id="zoomIn">+</button>
       <button id="zoomOut">−</button>
+      <button id="modeBtn" data-i18n="mode"></button>
+      <button id="viewBtn" data-i18n="view"></button>
     </div>
   </section>
 
   <!-- Pause -->
   <section id="pause" class="screen overlay">
     <div class="panel">
-      <h2>Pause</h2>
+      <h2 data-i18n="pause"></h2>
       <ol id="pauseMissions" class="missions"></ol>
-      <button id="btnResume" class="primary">Weiterfliegen</button>
-      <button id="btnLand" class="ghost">Landen & auswerten</button>
-      <button id="btnQuit" class="ghost">Abbrechen</button>
+      <button id="btnResume" class="primary" data-i18n="resume"></button>
+      <button id="btnLand" class="ghost" data-i18n="landEval"></button>
+      <button id="btnQuit" class="ghost" data-i18n="abort"></button>
     </div>
   </section>
 
   <!-- Auswertung -->
   <section id="results" class="screen">
     <header class="bar">
-      <h2>Auswertung</h2>
+      <h2 data-i18n="results"></h2>
       <span id="resStars" class="stars-total"></span>
     </header>
     <div id="resList" class="results"></div>
-    <h3 class="section-h">Alle Fotos</h3>
+    <h3 class="section-h" data-i18n="allPhotos"></h3>
     <div id="gallery" class="gallery"></div>
     <div class="actions">
-      <button id="btnAgain" class="primary">Nochmals fliegen</button>
-      <button class="ghost" data-goto="levels">Andere Orte</button>
+      <button id="btnAgain" class="primary" data-i18n="again"></button>
+      <button class="ghost" data-goto="levels" data-i18n="otherPlaces"></button>
     </div>
   </section>
 
@@ -133,53 +168,88 @@
       <img id="viewerImg" alt="Foto" />
       <div id="viewerInfo"></div>
       <div class="row">
-        <a id="viewerDl" class="btn primary" download="mkphoto.jpg">Herunterladen</a>
-        <button id="viewerClose" class="ghost">Schliessen</button>
+        <a id="viewerDl" class="btn primary" download="mkphoto.jpg" data-i18n="download"></a>
+        <button id="viewerClose" class="ghost" data-i18n="close"></button>
       </div>
+    </div>
+  </section>
+
+  <!-- Einstellungen -->
+  <section id="settings" class="screen overlay">
+    <div class="panel">
+      <h2 data-i18n="settings"></h2>
+      <label class="field"><span data-i18n="language"></span><select id="setLang"></select></label>
+      <label class="field"><span data-i18n="quality"></span>
+        <select id="setQuality">
+          <option value="low" data-i18n="q_low"></option>
+          <option value="medium" data-i18n="q_medium"></option>
+          <option value="high" data-i18n="q_high"></option>
+        </select>
+      </label>
+      <label class="field"><span data-i18n="playerName"></span><input id="setName" maxlength="24" autocomplete="nickname" /></label>
+      <label class="field check"><input type="checkbox" id="setWind" /><span data-i18n="wind"></span></label>
+      <label class="field check"><input type="checkbox" id="setHelp" /><span data-i18n="missionHelp"></span></label>
+      <p class="small muted" id="setNote"></p>
+      <button class="primary" id="setSave" data-i18n="save"></button>
+    </div>
+  </section>
+
+  <!-- Bestenliste -->
+  <section id="board" class="screen overlay">
+    <div class="panel wide">
+      <h2 data-i18n="leaderboard"></h2>
+      <p class="small muted" id="boardMode"></p>
+      <div id="boardList" class="board"></div>
+      <button class="primary" data-close data-i18n="close"></button>
     </div>
   </section>
 
   <!-- Hilfe -->
   <section id="help" class="screen overlay">
     <div class="panel">
-      <h2>Steuerung</h2>
+      <h2 data-i18n="controls"></h2>
       <div class="help-cols">
         <div>
-          <h3>Tastatur & Maus</h3>
+          <h3 data-i18n="help_kb"></h3>
           <dl>
-            <dt>W A S D</dt><dd>Fliegen</dd>
-            <dt>E / Q</dt><dd>Steigen / Sinken</dd>
-            <dt>Maus</dt><dd>Drehen & Kamera neigen</dd>
-            <dt>← →</dt><dd>Drehen</dd>
-            <dt>R / F ↑ ↓</dt><dd>Kamera neigen</dd>
+            <dt>W A S D</dt><dd>↑ ← ↓ →</dd>
+            <dt>E / Q</dt><dd>⤒ ⤓</dd>
+            <dt>Maus / ← →</dt><dd>⟲ ⟳</dd>
+            <dt>Maus / R F ↑ ↓</dt><dd>Gimbal</dd>
             <dt>Mausrad, X / Z</dt><dd>Zoom</dd>
-            <dt>Leertaste, Klick</dt><dd>Foto</dd>
-            <dt>Shift</dt><dd>Sport-Modus</dd>
-            <dt>G</dt><dd>Drittel-Raster</dd>
-            <dt>Tab</dt><dd>Aufträge</dd>
-            <dt>L</dt><dd>Landen</dd>
-            <dt>Esc</dt><dd>Pause</dd>
+            <dt>Leertaste, Klick</dt><dd>📷</dd>
+            <dt>1 / 2 / 3, C</dt><dd>Cine / Normal / Sport</dd>
+            <dt>T</dt><dd data-i18n="mode_tripod"></dd>
+            <dt>Shift</dt><dd data-i18n="mode_sport"></dd>
+            <dt>V</dt><dd data-i18n="view"></dd>
+            <dt>H</dt><dd data-i18n="missionHelp"></dd>
+            <dt>G</dt><dd>3×3</dd>
+            <dt>Tab</dt><dd>⇄</dd>
+            <dt>L</dt><dd data-i18n="landEval"></dd>
+            <dt>Esc</dt><dd data-i18n="pause"></dd>
           </dl>
         </div>
         <div>
           <h3>Touch</h3>
           <dl>
-            <dt>Linker Stick</dt><dd>Höhe & Drehen</dd>
-            <dt>Rechter Stick</dt><dd>Vor/zurück & seitlich</dd>
-            <dt>▲ ▼</dt><dd>Kamera neigen</dd>
+            <dt>◀ Stick</dt><dd data-i18n="stickL"></dd>
+            <dt>Stick ▶</dt><dd data-i18n="stickR"></dd>
+            <dt>▲ ▼</dt><dd data-i18n="camera"></dd>
             <dt>+ −</dt><dd>Zoom</dd>
-            <dt>Weisser Knopf</dt><dd>Foto</dd>
+            <dt>⬤</dt><dd>📷</dd>
           </dl>
           <h3>Gamepad</h3>
           <dl>
-            <dt>Sticks</dt><dd>wie Drohnen-Fernsteuerung (Mode 2)</dd>
-            <dt>RT / A</dt><dd>Foto</dd>
-            <dt>LB / RB</dt><dd>Kamera neigen</dd>
+            <dt>Sticks</dt><dd>Mode 2</dd>
+            <dt>RT / A</dt><dd>📷</dd>
+            <dt>LB / RB</dt><dd>Gimbal</dd>
+            <dt>Y</dt><dd data-i18n="mode"></dd>
+            <dt>B</dt><dd data-i18n="view"></dd>
           </dl>
         </div>
       </div>
-      <h3>Bewertung</h3>
-      <p class="small muted">Jedes Foto bekommt bis 100 Punkte: Motiv sichtbar, Bildaufbau, Perspektive, Schärfe (stillhalten!) und Licht (Gegenlicht vermeiden). Ab 50 / 70 / 85 Punkten gibt es 1 / 2 / 3 Sterne.</p>
+      <h3 data-i18n="help_score"></h3>
+      <p class="small muted" data-i18n="help_score_txt"></p>
       <button class="primary" data-close>OK</button>
     </div>
   </section>

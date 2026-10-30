@@ -1,5 +1,4 @@
-# Schloss Lenzburg: Höhenburg auf dem Schlosshügel, Ringmauer, Palas, Bergfried, Barockgarten im Westen.
-# Lage aus swissBUILDINGS3D: Zentrum (-14.6, -2.1), Achse 20.6° ab Ost, 140 x 72 m, höchster First 24 m.
+# Schloss Lenzburg (Detailstufe 2). Lage aus swissBUILDINGS3D: Zentrum (-14.6, -2.1), Achse 20.6°, 140 x 72 m.
 import math
 
 CENTER = (-14.6, -2.1)
@@ -7,82 +6,110 @@ AXIS = 20.6
 
 
 def build(L):
-    wall = L.material('le_wall', L.tex_masonry('le_wall', (0.60, 0.57, 0.50), var=0.15, mortar=(0.66, 0.64, 0.58),
-                                                  rows=12, mean_w=1.6, jitter=0.45, seed=61), rough=0.95, meters=5.0)
-    plaster = L.material('le_plaster', L.tex_window_facade('le_plaster', base=(0.86, 0.83, 0.76), win=(0.10, 0.11, 0.12),
-                                                             frame=(0.55, 0.52, 0.48), cols=2, rows=1, wx=(0.36, 0.64), wy=(0.3, 0.75),
-                                                             ashlar=False, seed=62), rough=0.9, meters=6.0)
-    plaster_p = L.material('le_plain', L.tex_plaster('le_plain', (0.84, 0.81, 0.74), seed=63), rough=0.9, meters=6.0)
-    roof = L.material('le_roof', L.tex_roof_tiles('le_roof', (0.50, 0.26, 0.16), rows=20, cols=12, seed=64, aged=0.3), rough=0.8, meters=3.0)
-    wood = L.material('le_wood', L.tex_wood('le_wood', (0.30, 0.18, 0.10), boards=4, seed=65), rough=0.85, meters=1.5)
-    dark = L.material('le_dark', None, color=(0.05, 0.05, 0.05), rough=0.6)
+    wall = L.mat('castle_wall', (0.60, 0.57, 0.50), meters=4.0)
+    stone = L.mat('stone_tower', (0.55, 0.53, 0.48), meters=3.5)
+    plaster = L.mat('plaster_white', (0.86, 0.83, 0.76), meters=4.0)
+    quoin = L.mat('sandstone_detail', (0.70, 0.68, 0.60), meters=2.0)
+    roof = L.mat('roof_clay', (0.50, 0.26, 0.16), meters=2.2)
+    wood = L.mat('wood_dark', (0.30, 0.18, 0.10), meters=1.5)
+    glass = L.mat('glass', (0.05, 0.06, 0.08), rough=0.1)
+    shutter = L.mat('frame_green', (0.17, 0.29, 0.20))
+    dark = L.mat('dark', (0.05, 0.05, 0.05))
+    gold = L.mat('gold', (0.75, 0.6, 0.3), rough=0.3, metal=1.0)
 
     ax = L.Axis(CENTER[0], CENTER[1], AXIS)
+    A = ax.ang
     root = L.empty('Schloss')
     walls = L.empty('Ringmauer', root)
     bld = L.empty('Gebaeude', root)
     keep = L.empty('Bergfried', root)
 
-    # Ringmauer (oval) – folgt dem Hügelplateau; reicht tief in den Hang
+    # ---------- Ringmauer mit Wehrgang-Abdeckung und Zinnen-Andeutung
     ring = []
-    for k in range(28):
-        t = k / 28 * math.tau
+    for k in range(32):
+        t = -k / 32 * math.tau   # Uhrzeigersinn
         a = 68 * math.cos(t)
-        b = 31 * math.sin(t) * (1.0 - 0.18 * max(0, -math.cos(t)))  # Westseite schmaler
+        b = 31 * math.sin(t) * (1.0 - 0.18 * max(0, -math.cos(t)))
         ring.append(ax.p(a, b))
-    L.wall_ring('ring', ring, -14.0, 5.0, 1.8, wall, walls)
-    # Wehrgang-Abdeckung (Ziegel) auf der Mauer
+    L.wall_ring('ring', ring, -16.0, 5.0, 1.8, wall, walls)
     for i in range(len(ring)):
         p0, p1 = ring[i], ring[(i + 1) % len(ring)]
         Ls, ang = L.frame_along(p0, p1)
         mid = ((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
-        L.box(f'ring_cap{i}', (*mid, 5.25), (Ls + 1.8, 2.3, 0.5), roof, walls, rot_z=ang)
-    # Bastion / Rundtürme an der Mauer
+        L.gable_roof(f'ring_cap{i}', p0, p1, 2.6, 5.0, 5.9, roof, wall, walls, overhang=0.6, thick=0.12)
+        # Strebepfeiler aussen
+        L.box(f'ring_bt{i}', (*mid, -6.0), (1.4, 3.6, 20), wall, walls, rot_z=ang)
     for t, r in ((0.0, 5.0), (0.62, 4.0), (-0.62, 4.0), (2.7, 4.5), (-2.7, 4.5)):
         p = ax.p(68 * math.cos(t), 31 * math.sin(t))
-        L.prism(f'bast{t}', (*p, -14), r, 22, 16, wall, walls)
-        L.prism(f'bast_roof{t}', (*p, 8), r + 0.6, 5.5, 16, roof, walls, radius_top=0.05)
+        L.prism(f'bast{t}', (*p, -16), r, 24, 20, wall, walls)
+        L.prism(f'bast_ring{t}', (*p, 7.6), r + 0.25, 0.4, 20, quoin, walls)
+        L.prism(f'bast_roof{t}', (*p, 8), r + 0.7, 6.0, 20, roof, walls, radius_top=0.05)
+        L.prism(f'bast_tip{t}', (*p, 14), 0.06, 1.2, 6, gold, walls)
 
-    def house(name, a, b, la, lb, h, ridge, mat=plaster, par=bld, hip=False):
-        L.abox(name, ax, a, b, (h - 12) / 2, (la, lb, h + 12), mat, par)  # Fundament reicht in den Hang
-        if hip:
-            c = ax.p(a, b)
-            L.hip_roof(name + '_roof', (*c, 0), la, lb, h, ridge - h, roof, par, rot=ax.ang, ridge_frac=0.5, overhang=0.6)
-        else:
-            L.gable_roof(name + '_roof', ax.p(a - la / 2, b), ax.p(a + la / 2, b), lb + 1.2, h, ridge, roof, wood, par, overhang=0.5)
+    WIN = dict(floors=3, floor_h=3.4, z_start=1.4, spacing=3.0, win_w=1.0, win_h=1.6, margin=1.6,
+               sill=(quoin, 0.2), mullion=True)
 
-    # Südflügel: Palas (höchster First 24 m)
-    house('palas', 12, -21, 44, 13, 15, 24, hip=True)
-    # Landvogtei Ost-Süd
-    house('landvogtei', 40, -17, 14, 12, 12.5, 21.5)
-    # Ostflügel / Stapferhaus
-    house('stapferhaus', 52, 2, 13, 26, 11, 19, hip=True)
-    # Nordflügel: Ritterhaus
-    house('ritterhaus', 40, 22, 26, 11, 10, 18)
-    # Nordwest: Torhaus mit Tor
-    house('torhaus', -20, 17, 16, 10, 8, 15)
-    L.abox('tor', ax, -20, 22.1, 3.0, (4.0, 0.2, 5.0), dark, bld)
-    # Verbindungsbau Nord
-    house('nordbau', 14, 22, 24, 9, 9, 16, mat=plaster_p)
+    def house(name, a, b, la, lb, h, ridge, hip=False, floors=3, par=bld, mat_=plaster):
+        cx, cy = ax.p(a, b)
+        win = dict(WIN, floors=floors)
+        L.building(name, cx, cy, la, lb, -12, h, A, mat_, par, roof=roof, roof_h=ridge - h,
+                   roof_type='hip' if hip else 'gable', glass=glass, frame=quoin, win=win,
+                   quoins=quoin, plinth=(wall, 1.0))
+        # Fensterläden neben einigen Fenstern
+        # Lukarnen (Dachgauben) auf der Längsseite
+        n = max(1, int(la / 9))
+        for i in range(n):
+            da = -la / 2 + (i + 0.5) * la / n
+            for s in (-1, 1):
+                cxx, cyy = ax.p(a + da, b + s * lb * 0.22)
+                zz = h + (ridge - h) * 0.35
+                L.box(f'{name}_dorm{i}{s}', (cxx, cyy, zz + 0.7), (1.6, 1.6, 1.4), plaster, par, rot_z=A)
+                L.hip_roof(f'{name}_dormr{i}{s}', (cxx, cyy, 0), 1.9, 1.9, zz + 1.4, 0.9, roof, par, rot=A, ridge_frac=0.02, overhang=0.15)
+                gx, gy = ax.p(a + da, b + s * (lb * 0.22 + 0.81))
+                L.box(f'{name}_dormg{i}{s}', (gx, gy, zz + 0.7), (0.8, 0.04, 0.9), glass, par, rot_z=A)
+
+    house('palas', 12, -21, 44, 13, 15, 24, hip=True, floors=4)
+    house('landvogtei', 40, -17, 14, 12, 12.5, 21.5, floors=3)
+    house('stapferhaus', 52, 2, 13, 26, 11, 19, hip=True, floors=3)
+    house('ritterhaus', 40, 22, 26, 11, 10, 18, floors=2)
+    house('torhaus', -20, 17, 16, 10, 8, 15, floors=2, mat_=stone)
+    house('nordbau', 14, 22, 24, 9, 9, 16, floors=2)
+    # Tor mit Rundbogen
+    L.abox('tor', ax, -20, 22.15, 2.8, (3.6, 0.2, 4.6), dark, bld)
+    L.abox('tor_frame', ax, -20, 22.3, 5.4, (4.6, 0.4, 0.6), quoin, bld)
     # Treppenturm im Hof
     c = ax.p(26, -8)
-    L.prism('treppenturm', (*c, -2), 2.4, 17, 8, plaster_p, bld)
-    L.prism('treppenturm_roof', (*c, 15), 3.0, 5, 8, roof, bld, radius_top=0.05)
+    L.prism('treppenturm', (*c, -2), 2.4, 17, 12, plaster, bld)
+    L.prism('treppenturm_roof', (*c, 15), 3.0, 5.5, 12, roof, bld, radius_top=0.05)
+    L.prism('treppenturm_tip', (*c, 20.5), 0.06, 1.3, 6, gold, bld)
+    # Hofpflaster + Brunnen
+    L.abox('hof', ax, 25, 2, 0.05, (30, 26, 0.1), L.mat('cobble', (0.5, 0.48, 0.45), meters=2.0), bld)
+    c = ax.p(22, 4)
+    L.prism('brunnen', (*c, 0), 1.6, 0.8, 16, quoin, bld)
+    L.prism('brunnen_st', (*c, 0.8), 0.25, 1.8, 8, quoin, bld)
 
-    # Bergfried (Hauptturm) – quadratisch, Zeltdach
+    # ---------- Bergfried (quadratisch, Bossenquader, Zeltdach)
     c = ax.p(60, -14)
-    L.abox('bf_body', ax, 60, -14, 4, (11, 11, 32), wall, keep)
-    L.abox('bf_top', ax, 60, -14, 20.4, (11.6, 11.6, 0.8), wall, keep)
-    L.pyramid_roof('bf_roof', c, 11.0, 11.0, 20.8, 8.0, roof, keep, rot=ax.ang, overhang=0.6)
-    for k, (da, db) in enumerate(((5.6, 0), (-5.6, 0), (0, 5.6), (0, -5.6))):
-        L.abox(f'bf_win{k}', ax, 60 + da * 1.005, -14 + db * 1.005, 16, (0.12 if da else 1.0, 1.0 if da else 0.12, 1.6), dark, keep)
+    L.abox('bf_body', ax, 60, -14, 4, (11, 11, 32), stone, keep)
+    L.abox('bf_band', ax, 60, -14, 14.0, (11.4, 11.4, 0.4), quoin, keep)
+    L.abox('bf_top', ax, 60, -14, 20.4, (11.8, 11.8, 0.8), quoin, keep)
+    for k in range(4):
+        for s in (-1, 1):
+            # Pechnasen / Konsolen
+            L.abox(f'bf_corb{k}{s}', ax, 60 + (5.8 if k == 0 else -5.8 if k == 1 else s * 3), -14 + (5.8 if k == 2 else -5.8 if k == 3 else s * 3), 19.6, (0.6, 0.6, 0.8), quoin, keep)
+    L.pyramid_roof('bf_roof', c, 11.0, 11.0, 20.8, 8.0, roof, keep, rot=A, overhang=0.6)
+    L.prism('bf_tip', (*c, 28.8), 0.08, 1.6, 6, gold, keep)
+    pts = L.rect_pts(*c, 11, 11, A)
+    for i in range(4):
+        L.facade(f'bf_w{i}', pts[i], pts[(i + 1) % 4], glass, quoin, keep, floors=2, floor_h=5.0, z_start=9.0,
+                 spacing=4, win_w=0.7, win_h=1.4, margin=3.5, arch='round', mullion=False)
 
-    # Barockgarten-Terrasse (West): niedrige Stützmauer
-    gar = [ax.p(a, b) for a, b in ((-62, -18), (-30, -24), (-30, 20), (-58, 16))]
+    # Barockgarten-Terrasse (West)
+    gar = [ax.p(a, b) for a, b in ((-62, -18), (-58, 16), (-30, 20), (-30, -24))]
     L.wall_ring('garden', gar, -3, 1.2, 0.8, wall, walls)
 
     L.merge_children(walls)
     L.merge_children(bld)
     L.merge_children(keep)
     c = ax.p(0, 0)
-    L.hide_box('Hide_schloss', (*c, 15), (150, 80, 60), rot_z=ax.ang)
+    L.hide_box('Hide_schloss', (*c, 15), (150, 80, 60), rot_z=A)

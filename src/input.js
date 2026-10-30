@@ -23,6 +23,13 @@ export class Input {
       if (e.code === 'Tab' || e.code === 'KeyM') this.fire('missions');
       if (e.code === 'KeyL') this.fire('land');
       if (e.code === 'Escape' || e.code === 'KeyP') this.fire('pause');
+      if (e.code === 'Digit1') this.fire('mode', 'cine');
+      if (e.code === 'Digit2') this.fire('mode', 'normal');
+      if (e.code === 'Digit3') this.fire('mode', 'sport');
+      if (e.code === 'KeyC') this.fire('mode', 'next');
+      if (e.code === 'KeyT') this.fire('mode', 'tripod');
+      if (e.code === 'KeyV') this.fire('view');
+      if (e.code === 'KeyH') this.fire('help');
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -48,7 +55,7 @@ export class Input {
   }
 
   on(name, fn) { this.handlers[name] = fn; }
-  fire(name) { this.handlers[name]?.(); }
+  fire(name, arg) { this.handlers[name]?.(arg); }
 
   setTouch(v) {
     if (this.isTouch === v) return;
@@ -101,6 +108,8 @@ export class Input {
     hold('#zoomIn', 'zoom', 1);
     hold('#zoomOut', 'zoom', -1);
     root.querySelector('#shutterBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); this.fire('shutter'); });
+    root.querySelector('#modeBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); this.fire('mode', 'next'); });
+    root.querySelector('#viewBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); this.fire('view'); });
   }
 
   // Achsen für diesen Frame
@@ -143,6 +152,12 @@ export class Input {
       const shutter = b(7) || b(0);
       if (shutter && !this._padShutter) this.fire('shutter');
       this._padShutter = shutter;
+      const modeB = b(3);
+      if (modeB && !this._padMode) this.fire('mode', 'next');
+      this._padMode = modeB;
+      const viewB = b(1);
+      if (viewB && !this._padView) this.fire('view');
+      this._padView = viewB;
       const pause = b(9);
       if (pause && !this._padPause) this.fire('pause');
       this._padPause = pause;

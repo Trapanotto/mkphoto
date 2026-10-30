@@ -486,7 +486,7 @@ def export(path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     kw = dict(filepath=path, export_format='GLB', export_apply=True, export_yup=True,
               export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=6)
-    for extra in ({'export_image_format': 'JPEG', 'export_image_quality': 82}, {'export_image_format': 'JPEG'}, {}):
+    for extra in ({'export_image_format': 'NONE'}, {}):
         try:
             bpy.ops.export_scene.gltf(**kw, **extra)
             return

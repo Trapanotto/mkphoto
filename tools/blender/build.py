@@ -8,6 +8,10 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, 'models'))
 
 import lib  # noqa: E402
+import lib2  # noqa: E402
+for _k in dir(lib2):
+    if not _k.startswith('__'):
+        setattr(lib, _k, getattr(lib2, _k))
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 name = argv[0]

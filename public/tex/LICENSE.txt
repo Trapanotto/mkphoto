@@ -1,0 +1,23 @@
+Texturen: Poly Haven (https://polyhaven.com), Lizenz CC0 1.0 – gemeinfrei.
+roof_red: https://polyhaven.com/a/roof_tiles
+roof_clay: https://polyhaven.com/a/clay_roof_tiles_02
+roof_slate: https://polyhaven.com/a/grey_roof_tiles
+wood_weathered: https://polyhaven.com/a/weathered_planks
+wood_deck: https://polyhaven.com/a/brown_planks_05
+wood_dark: https://polyhaven.com/a/dark_wood
+wood_rough: https://polyhaven.com/a/rough_wood
+stone_tower: https://polyhaven.com/a/castle_wall_varriation
+stone_medieval: https://polyhaven.com/a/medieval_blocks_02
+sandstone: https://polyhaven.com/a/large_sandstone_blocks_01
+sandstone_old: https://polyhaven.com/a/old_sandstone_02
+castle_wall: https://polyhaven.com/a/castle_wall_slates
+stone_wall: https://polyhaven.com/a/stone_wall_04
+plaster: https://polyhaven.com/a/white_plaster_rough_01
+plaster_old: https://polyhaven.com/a/plastered_wall_04
+rock: https://polyhaven.com/a/rock_wall_08
+granite: https://polyhaven.com/a/granite_wall
+copper: https://polyhaven.com/a/green_metal_rust
+iron: https://polyhaven.com/a/rusty_metal_02
+cobble: https://polyhaven.com/a/cobblestone_floor_04
+concrete_board: https://polyhaven.com/a/wood_textured_concrete
+asphalt: https://polyhaven.com/a/asphalt_02
