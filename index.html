@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <title>MKPHOTO</title>
+  <link rel="icon" href="logo.svg" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <!-- Titel -->
+  <section id="title" class="screen active">
+    <div class="title-inner">
+      <img src="logo.svg" class="logo" alt="MK" />
+      <h1>MKPHOTO</h1>
+      <p class="tag">Drohnenfotografie über der Schweiz</p>
+      <button id="btnPlay" class="primary">Spielen</button>
+      <button id="btnHelp" class="ghost">Steuerung</button>
+    </div>
+    <footer class="credit">Geodaten © swisstopo · geo.admin.ch</footer>
+  </section>
+
+  <!-- Levelauswahl -->
+  <section id="levels" class="screen">
+    <header class="bar">
+      <button class="ghost back" data-goto="title">‹</button>
+      <h2>Ort wählen</h2>
+      <span id="totalStars" class="stars-total"></span>
+    </header>
+    <div id="levelGrid" class="grid"></div>
+  </section>
+
+  <!-- Briefing -->
+  <section id="briefing" class="screen">
+    <header class="bar">
+      <button class="ghost back" data-goto="levels">‹</button>
+      <h2 id="briefTitle"></h2>
+    </header>
+    <div class="brief">
+      <p id="briefPlace" class="muted"></p>
+      <ol id="briefMissions" class="missions"></ol>
+      <p class="muted small">Akku: 6 Minuten · Speicherkarte: 24 Fotos · max. 120 m über Grund</p>
+      <button id="btnStart" class="primary">Abheben</button>
+    </div>
+  </section>
+
+  <!-- Laden -->
+  <section id="loading" class="screen">
+    <img src="logo.svg" class="logo small pulse" alt="" />
+    <p id="loadText">Lade Geodaten …</p>
+    <div class="progress"><div id="loadBar"></div></div>
+    <p class="muted small">swissALTI3D · SWISSIMAGE · swissBUILDINGS3D</p>
+  </section>
+
+  <!-- HUD -->
+  <section id="hud" class="hud">
+    <div class="hud-top">
+      <div class="hud-tl">
+        <div id="hudPlace" class="chip"></div>
+        <div id="hudMission" class="chip mission-chip"></div>
+      </div>
+      <div class="compass"><div id="compassTape"></div><div class="compass-mark"></div></div>
+      <div class="hud-tr">
+        <div class="chip"><span id="hudBattery">100%</span> 🔋</div>
+        <div class="chip"><span id="hudShots">0/24</span> 📷</div>
+        <button id="btnPause" class="chip btn">❚❚</button>
+      </div>
+    </div>
+    <div id="frame" class="frame"><i></i><i></i><i></i><i></i></div>
+    <div id="grid3" class="grid3 hidden"></div>
+    <div id="nofly" class="warn hidden">⚠ Flugverbotszone</div>
+    <div id="toast" class="toast"></div>
+    <div class="hud-bl">
+      <div><b id="hudH">0</b><small>m H</small></div>
+      <div><b id="hudD">0</b><small>m D</small></div>
+      <div><b id="hudS">0.0</b><small>m/s</small></div>
+    </div>
+    <div class="hud-br">
+      <div><b id="hudGim">-10°</b><small>Gimbal</small></div>
+      <div><b id="hudZoom">1.0×</b><small>Zoom</small></div>
+    </div>
+    <div class="gimbal-scale"><div id="gimbalDot"></div></div>
+    <div id="flash" class="flash"></div>
+    <div class="attrib">Geodaten © swisstopo</div>
+    <div id="lockHint" class="lock-hint">Klicken zum Steuern · Esc = Pause</div>
+  </section>
+
+  <!-- Touch-Steuerung -->
+  <section id="touch" class="touch hidden">
+    <div id="stickL" class="stick left"><div class="knob"></div><span>Höhe / Drehen</span></div>
+    <div id="stickR" class="stick right"><div class="knob"></div><span>Fliegen</span></div>
+    <button id="shutterBtn" class="shutter" aria-label="Foto"></button>
+    <div class="side-btns">
+      <button id="gimUp">▲<small>Kamera</small></button>
+      <button id="gimDown">▼<small>Kamera</small></button>
+      <button id="zoomIn">+</button>
+      <button id="zoomOut">−</button>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <section id="pause" class="screen overlay">
+    <div class="panel">
+      <h2>Pause</h2>
+      <ol id="pauseMissions" class="missions"></ol>
+      <button id="btnResume" class="primary">Weiterfliegen</button>
+      <button id="btnLand" class="ghost">Landen & auswerten</button>
+      <button id="btnQuit" class="ghost">Abbrechen</button>
+    </div>
+  </section>
+
+  <!-- Auswertung -->
+  <section id="results" class="screen">
+    <header class="bar">
+      <h2>Auswertung</h2>
+      <span id="resStars" class="stars-total"></span>
+    </header>
+    <div id="resList" class="results"></div>
+    <h3 class="section-h">Alle Fotos</h3>
+    <div id="gallery" class="gallery"></div>
+    <div class="actions">
+      <button id="btnAgain" class="primary">Nochmals fliegen</button>
+      <button class="ghost" data-goto="levels">Andere Orte</button>
+    </div>
+  </section>
+
+  <!-- Foto-Ansicht -->
+  <section id="viewer" class="screen overlay">
+    <div class="panel wide">
+      <img id="viewerImg" alt="Foto" />
+      <div id="viewerInfo"></div>
+      <div class="row">
+        <a id="viewerDl" class="btn primary" download="mkphoto.jpg">Herunterladen</a>
+        <button id="viewerClose" class="ghost">Schliessen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hilfe -->
+  <section id="help" class="screen overlay">
+    <div class="panel">
+      <h2>Steuerung</h2>
+      <div class="help-cols">
+        <div>
+          <h3>Tastatur & Maus</h3>
+          <dl>
+            <dt>W A S D</dt><dd>Fliegen</dd>
+            <dt>E / Q</dt><dd>Steigen / Sinken</dd>
+            <dt>Maus</dt><dd>Drehen & Kamera neigen</dd>
+            <dt>← →</dt><dd>Drehen</dd>
+            <dt>R / F ↑ ↓</dt><dd>Kamera neigen</dd>
+            <dt>Mausrad, X / Z</dt><dd>Zoom</dd>
+            <dt>Leertaste, Klick</dt><dd>Foto</dd>
+            <dt>Shift</dt><dd>Sport-Modus</dd>
+            <dt>G</dt><dd>Drittel-Raster</dd>
+            <dt>Tab</dt><dd>Aufträge</dd>
+            <dt>L</dt><dd>Landen</dd>
+            <dt>Esc</dt><dd>Pause</dd>
+          </dl>
+        </div>
+        <div>
+          <h3>Touch</h3>
+          <dl>
+            <dt>Linker Stick</dt><dd>Höhe & Drehen</dd>
+            <dt>Rechter Stick</dt><dd>Vor/zurück & seitlich</dd>
+            <dt>▲ ▼</dt><dd>Kamera neigen</dd>
+            <dt>+ −</dt><dd>Zoom</dd>
+            <dt>Weisser Knopf</dt><dd>Foto</dd>
+          </dl>
+          <h3>Gamepad</h3>
+          <dl>
+            <dt>Sticks</dt><dd>wie Drohnen-Fernsteuerung (Mode 2)</dd>
+            <dt>RT / A</dt><dd>Foto</dd>
+            <dt>LB / RB</dt><dd>Kamera neigen</dd>
+          </dl>
+        </div>
+      </div>
+      <h3>Bewertung</h3>
+      <p class="small muted">Jedes Foto bekommt bis 100 Punkte: Motiv sichtbar, Bildaufbau, Perspektive, Schärfe (stillhalten!) und Licht (Gegenlicht vermeiden). Ab 50 / 70 / 85 Punkten gibt es 1 / 2 / 3 Sterne.</p>
+      <button class="primary" data-close>OK</button>
+    </div>
+  </section>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

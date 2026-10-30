@@ -1,0 +1,20 @@
+{
+  "name": "mkphoto",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "models": "node tools/build-models.mjs"
+  },
+  "dependencies": {
+    "3d-tiles-renderer": "^0.5.3",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1",
+    "vite": "^8.3.5"
+  }
+}

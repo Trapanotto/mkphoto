@@ -1,0 +1,7 @@
+node_modules/
+dist/
+tools/blender/blend/
+tools/blender/__pycache__/
+tools/blender/models/__pycache__/
+.claude/
+tools/blender/tex/
