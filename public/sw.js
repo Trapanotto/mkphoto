@@ -1,5 +1,5 @@
 // MKPHOTO Service Worker: App-Dateien, Modelle und Texturen offline; Geodaten mit begrenztem Cache.
-const VERSION = 'mkphoto-v2';
+const VERSION = 'mkphoto-v3';
 const APP = `${VERSION}-app`;
 const GEO = `${VERSION}-geo`;
 const GEO_MAX = 2500; // max. Anzahl gecachter Kacheln

@@ -10,7 +10,7 @@ def build(L):
     stone = L.mat('stone_tower', (0.55, 0.53, 0.48), meters=3.5)
     plaster = L.mat('plaster_white', (0.86, 0.83, 0.76), meters=4.0)
     quoin = L.mat('sandstone_detail', (0.70, 0.68, 0.60), meters=2.0)
-    roof = L.mat('roof_clay', (0.50, 0.26, 0.16), meters=2.2)
+    roof = L.mat('roof_dark', (0.36, 0.26, 0.20), meters=2.2)
     wood = L.mat('wood_dark', (0.30, 0.18, 0.10), meters=1.5)
     glass = L.mat('glass', (0.05, 0.06, 0.08), rough=0.1)
     shutter = L.mat('frame_green', (0.17, 0.29, 0.20))
@@ -90,15 +90,20 @@ def build(L):
 
     # ---------- Bergfried (quadratisch, Bossenquader, Zeltdach)
     c = ax.p(60, -14)
-    L.abox('bf_body', ax, 60, -14, 4, (11, 11, 32), stone, keep)
+    L.abox('bf_body', ax, 60, -14, 6, (11, 11, 36), plaster, keep)
     L.abox('bf_band', ax, 60, -14, 14.0, (11.4, 11.4, 0.4), quoin, keep)
     L.abox('bf_top', ax, 60, -14, 20.4, (11.8, 11.8, 0.8), quoin, keep)
     for k in range(4):
         for s in (-1, 1):
             # Pechnasen / Konsolen
             L.abox(f'bf_corb{k}{s}', ax, 60 + (5.8 if k == 0 else -5.8 if k == 1 else s * 3), -14 + (5.8 if k == 2 else -5.8 if k == 3 else s * 3), 19.6, (0.6, 0.6, 0.8), quoin, keep)
-    L.pyramid_roof('bf_roof', c, 11.0, 11.0, 20.8, 8.0, roof, keep, rot=A, overhang=0.6)
-    L.prism('bf_tip', (*c, 28.8), 0.08, 1.6, 6, gold, keep)
+    # Zinnenkranz
+    for k in range(4):
+        for m in range(5):
+            off = -4.6 + m * 2.3
+            da, db = [(5.6, off), (-5.6, off), (off, 5.6), (off, -5.6)][k]
+            L.abox(f'bf_merlon{k}_{m}', ax, 60 + da, -14 + db, 24.6, (1.2 if k < 2 else 1.3, 1.3 if k < 2 else 1.2, 1.6), plaster, keep)
+    L.abox('bf_roofplate', ax, 60, -14, 23.9, (10.6, 10.6, 0.3), roof, keep)
     pts = L.rect_pts(*c, 11, 11, A)
     for i in range(4):
         L.facade(f'bf_w{i}', pts[i], pts[(i + 1) % 4], glass, quoin, keep, floors=2, floor_h=5.0, z_start=9.0,

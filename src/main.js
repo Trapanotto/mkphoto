@@ -5,7 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { N8AOPass } from 'n8ao';
-import { GeoWorld, dracoLoader, setHideBoxes, buildOrthoAtlas, firstRealHit, setFacadeTextures, setFacadeStyle } from './geo.js';
+import { dracoLoader, setHideBoxes, firstRealHit, setFacadeTextures, setFacadeStyle } from './geo.js';
+import { StaticWorld } from './world.js';
 import { Drone, MODE_ORDER } from './drone.js';
 import { Input } from './input.js';
 import { LEVELS, TIMES } from './levels.js';
@@ -42,9 +43,9 @@ setLang(settings.lang);
 
 const PRESETS = {
   low: { pixelRatio: 1, antialias: false, overlayRes: 256, terrainError: 10, buildings: true, buildingError: 14, buildingRadius: 1200,
-    trees: true, treeRadius: 450, treeError: 24, atlasZoom: 16, atlasRadius: 800, shadows: false, ao: false, water: 'simple', smallTex: true, pip: false },
+    trees: true, treeRadius: 300, treeError: 24, atlasZoom: 16, atlasRadius: 800, shadows: false, ao: false, water: 'simple', smallTex: true, pip: false },
   medium: { pixelRatio: 1.25, antialias: true, overlayRes: 256, terrainError: 6, buildings: true, buildingError: 9, buildingRadius: 1800,
-    trees: true, treeRadius: 800, treeError: 14, atlasZoom: 16, atlasRadius: 1000, shadows: 'focus', shadowSize: 1024, ao: false, water: 'simple', smallTex: true, pip: true },
+    trees: true, treeRadius: 500, treeError: 14, atlasZoom: 16, atlasRadius: 1000, shadows: 'focus', shadowSize: 1024, ao: false, water: 'simple', smallTex: true, pip: true },
   high: { pixelRatio: 1.5, antialias: true, overlayRes: 512, terrainError: 2, buildings: true, buildingError: 4, buildingRadius: 2500,
     trees: true, treeRadius: 1600, treeError: 6, treeShadows: true, buildingShadows: true, atlasZoom: 17, atlasRadius: 1100,
     shadows: 'follow', shadowSize: 4096, ao: true, water: 'reflect', smallTex: false, pip: true },
@@ -300,7 +301,11 @@ async function startLevel(level, opts = {}) {
 
   const tod = TIMES[currentTod] || TIMES.noon;
   setFacadeStyle(level.facade);
-  const world = new GeoWorld({ scene, camera, renderer, level, quality });
+  const world = new StaticWorld({ scene, level, quality });
+  const loadToken = {};
+  startLevel.token = loadToken;
+  await world.load((p) => { $('#loadBar').style.width = `${Math.round(p * 90)}%`; });
+  if (startLevel.token !== loadToken) { world.dispose(); return; }
   const frame = world.frame;
   drone.wind.set(level.wind[0], 0, level.wind[1]);
   drone.windEnabled = settings.wind;
@@ -326,35 +331,19 @@ async function startLevel(level, opts = {}) {
   scene.add(game.models);
   setSun(tod.az, tod.el);
 
-  const atlasPromise = buildOrthoAtlas(frame, quality.atlasRadius, quality.atlasZoom).then((a) => minimap.setAtlas(a)).catch((e) => console.warn('Atlas', e));
+  minimap.setAtlas(world.atlas);
   const modelPromises = level.landmarks.map((lm) => loader.loadAsync(lm.model).then((g) => ({ lm, g })).catch((e) => {
     console.warn('Modell fehlt:', lm.model, e.message);
     return { lm, g: null };
   }));
 
-  // Auf Gelände warten
-  const t0 = performance.now();
-  let stable = 0;
-  await new Promise((resolve) => {
-    const tick = () => {
-      if (!game || game.world !== world) return resolve();
-      world.update();
-      renderer.render(scene, camera);
-      const p = world.loadProgress;
-      const elapsed = (performance.now() - t0) / 1000;
-      $('#loadBar').style.width = `${Math.round(Math.min(p, elapsed / 8) * 100)}%`;
-      const g = world.groundHeight(spawn.x, spawn.z);
-      if (g !== null && Math.abs(drone.pos.y - (g + level.spawn.agl)) > 1) {
-        drone.pos.y = g + level.spawn.agl;
-        drone.applyCamera();
-      }
-      stable = p >= 0.999 && g !== null ? stable + 1 : 0;
-      if ((stable > 30 && elapsed > 2.5) || elapsed > 35) return resolve();
-      nextFrame(tick);
-    };
-    tick();
-  });
-  if (!game || game.world !== world) return;
+  // Startposition auf das Gelände setzen
+  {
+    const g = world.groundHeight(spawn.x, spawn.z);
+    if (g !== null) drone.pos.y = g + level.spawn.agl;
+    drone.applyCamera();
+    $('#loadBar').style.width = '95%';
+  }
 
   // Wasser
   if (level.water) {
@@ -369,7 +358,6 @@ async function startLevel(level, opts = {}) {
   }
 
   $('#loadText').textContent = t('placingModels');
-  await atlasPromise;
   const loaded = await Promise.all(modelPromises);
   const hideBoxes = [];
   for (const { lm, g } of loaded) {

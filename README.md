@@ -64,7 +64,8 @@ Koordinaten im Modell: x = Ost, y = Nord, z = oben, Ursprung = Ankerpunkt aus `s
 
 ```
 src/main.js     Spielablauf, Szene, HUD, Auswertung
-src/geo.js      swisstopo-Streaming, Koordinaten, Gebäude-Shader
+src/world.js    vorberechnete Welt laden (Gelände, Gebäude, Bäume)
+src/geo.js      Gebäude-Shader, Hilfen
 src/drone.js    Flugmodell + Gimbal-Kamera
 src/input.js    Tastatur/Maus, Touch, Gamepad
 src/photo.js    Foto aufnehmen + bewerten
@@ -108,3 +109,26 @@ create policy "eintragen" on scores for insert with check (true);
 VITE_SUPABASE_URL=https://<projekt>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
+
+## Version 3: vorberechnete Welten (kein Streaming)
+
+Gelände, Luftbild, Gebäude und Bäume werden **einmalig** von swisstopo geladen und in Blender zu fertigen Welten gebaut. Das Spiel lädt nur noch Dateien aus `public/world/<level>/`.
+
+```bash
+npm run world -- luzern            # ein Level komplett (laden + Blender)
+npm run world -- all               # alle Levels
+npm run world -- bern --skip-fetch # nur neu bauen (Daten aus .cache/bake)
+```
+
+| Ring | Ausdehnung | Gelände | Luftbild |
+|---|---|---|---|
+| Kern | ±1.2 km (Matterhorn ±2 km) | swissALTI3D 2–4 m | SWISSIMAGE ~0.4 m |
+| Mittel | ±5–7 km | swissALTI3D 20 m | ~3 m |
+| Horizont | ±25–40 km | Terrarium (auch Ausland), Erdkrümmung | ~30 m |
+
+- **Gebäude:** echte Dachflächen aus swissBUILDINGS3D, Wände in Blender bis zum Gelände neu modelliert; an den Wahrzeichen entfernt (`Hide_*`-Boxen der Modelle).
+- **Bäume:** Standorte und Höhen aus der swisstopo-Vegetation, eigene Blender-Bäume (`models/baeume.glb`) als Instanzen.
+- **Handy-Varianten:** gröberes Gelände, Gebäude ±750 m, halbe Texturauflösung (`*_s`).
+- **Referenzen für die Wahrzeichen:** freie Fotos von Wikimedia Commons (CC BY-SA). Google-Street-View-Bilder werden nicht ins Spiel übernommen (Google-Nutzungsbedingungen).
+
+Werkzeuge: `tools/bake/fetch.mjs` (Gelände + Luftbild), `tools/bake/fetch3d.mjs` (Gebäude + Bäume), `tools/bake/hides.mjs`, `tools/blender/world.py`.

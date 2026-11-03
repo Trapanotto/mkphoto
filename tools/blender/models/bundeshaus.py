@@ -47,9 +47,14 @@ def build(L):
     for sa in (-1, 1):
         for sb in (-1, 1):
             a, b = sa * (LEN / 2 - P / 2 + 1.2), sb * (WID / 2 - P / 2 + 1.2)
-            block(f'pav{sa}{sb}', a, b, P, P, H + 4, main, roof=copper, roof_h=7.0)
+            block(f'pav{sa}{sb}', a, b, P, P, H + 4, main)
             c = ax.p(a, b)
-            L.prism(f'pav_tip{sa}{sb}', (*c, H + 4 + 7.4), 0.25, 2.2, 6, gold, main, radius_top=0.05)
+            L.prism(f'pav_drum{sa}{sb}', (*c, H + 4), 5.6, 3.2, 16, sand, main)
+            L.prism(f'pav_drum_cor{sa}{sb}', (*c, H + 7.2), 6.0, 0.5, 16, sand_d, main)
+            L.dome(f'pav_dome{sa}{sb}', c, 5.7, H + 7.7, 5.5, copper, main, sides=24, rings=8)
+            L.prism(f'pav_lant{sa}{sb}', (*c, H + 13.0), 0.9, 1.8, 8, sand_d, main)
+            L.prism(f'pav_lroof{sa}{sb}', (*c, H + 14.8), 1.1, 1.0, 8, copper, main, radius_top=0.2)
+            L.prism(f'pav_tip{sa}{sb}', (*c, H + 15.8), 0.18, 1.4, 6, gold, main, radius_top=0.04)
 
     # ---------- Nordfassade: Portikus mit 6 Säulen, Giebel, Treppe
     a_n = LEN / 2

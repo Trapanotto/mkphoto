@@ -38,7 +38,7 @@ export const LEVELS = [
     name: { de: 'Kettenbrücke', fr: 'Pont suspendu', it: 'Ponte a catene', en: 'Chain Bridge' },
     place: 'Aarau',
     lat: 47.39534, lon: 8.04209, h: 400,
-    water: { at: [47.39534, 8.04209], radius: 650, color: 0x3d6b6a },
+    water: { at: [47.39534, 8.04209], radius: 420, color: 0x3d6b6a },
     sun: { az: 160, el: 40 },
     wind: [1.5, -1.0],
     spawn: { lat: 47.39470, lon: 8.03990, agl: 25, heading: 70 },

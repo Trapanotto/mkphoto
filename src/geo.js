@@ -1,56 +1,8 @@
-// Geodaten von swisstopo (geo.admin.ch), gestreamt über 3d-tiles-renderer.
-// Lokales Koordinatensystem pro Level: x = Ost, y = oben, -z = Nord (Meter).
+// Gebäude-Shader, Ausblend-Boxen und Hilfen für die vorberechnete Welt (keine Streaming-Abhängigkeiten).
 import * as THREE from 'three';
-import { TilesRenderer, WGS84_ELLIPSOID } from '3d-tiles-renderer';
-import {
-  QuantizedMeshPlugin,
-  ImageOverlayPlugin,
-  XYZTilesOverlay,
-  TilesFadePlugin,
-  GLTFExtensionsPlugin,
-} from '3d-tiles-renderer/plugins';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 export const dracoLoader = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-
-export const SWISSTOPO = {
-  terrain: 'https://3d.geo.admin.ch/ch.swisstopo.terrain.3d/v1/',
-  buildings: 'https://3d.geo.admin.ch/ch.swisstopo.swissbuildings3d.3d/v1/tileset.json',
-  vegetation: 'https://3d.geo.admin.ch/ch.swisstopo.vegetation.3d/v1/tileset.json',
-  swissimage: 'https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg',
-};
-
-const DEG = Math.PI / 180;
-
-const swissimage = () => new XYZTilesOverlay({ url: SWISSTOPO.swissimage, levels: 20, projection: 'EPSG:3857' });
-
-export class GeoFrame {
-  // lat/lon in Grad, h = Höhe des Ursprungs
-  constructor(lat, lon, h) {
-    this.lat = lat; this.lon = lon; this.h = h;
-    const enu = new THREE.Matrix4();
-    WGS84_ELLIPSOID.getEastNorthUpFrame(lat * DEG, lon * DEG, h, enu);
-    const toEnu = enu.clone().invert();
-    // ENU (x Ost, y Nord, z oben) -> three (x Ost, y oben, z Süd)
-    const rot = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
-    this.ecefToLocal = rot.multiply(toEnu);
-    this.localToEcef = this.ecefToLocal.clone().invert();
-  }
-  toLocal(latDeg, lonDeg, h = 0, target = new THREE.Vector3()) {
-    WGS84_ELLIPSOID.getCartographicToPosition(latDeg * DEG, lonDeg * DEG, h, target);
-    return target.applyMatrix4(this.ecefToLocal);
-  }
-  toLatLon(v) {
-    const p = v.clone().applyMatrix4(this.localToEcef);
-    const res = {};
-    WGS84_ELLIPSOID.getPositionToCartographic(p, res);
-    return { lat: res.lat / DEG, lon: res.lon / DEG, h: res.height };
-  }
-  applyTo(object) {
-    this.ecefToLocal.decompose(object.position, object.quaternion, object.scale);
-    object.updateMatrixWorld(true);
-  }
-}
 
 // ---------- Gebäude-Shader ----------
 // Dächer: echte SWISSIMAGE-Farben (via Overlay), Fassaden: Putz + Fenster.
@@ -96,38 +48,8 @@ export function firstRealHit(hits) {
 // Luftbild-Atlas für die Dächer im Kerngebiet (SWISSIMAGE, Web-Mercator-Kacheln)
 const ortho = { tex: { value: null }, rect: { value: new THREE.Vector4() }, on: { value: 0 } };
 
-export async function buildOrthoAtlas(frame, radius, zoom, onProgress) {
-  ortho.on.value = 0;
-  const n = 2 ** zoom;
-  const lat = frame.lat, lon = frame.lon;
-  const dLat = radius / 111320, dLon = radius / (111320 * Math.cos(lat * DEG));
-  const tx = (lo) => Math.floor(((lo + 180) / 360) * n);
-  const ty = (la) => Math.floor(((1 - Math.log(Math.tan(la * DEG) + 1 / Math.cos(la * DEG)) / Math.PI) / 2) * n);
-  const x0 = tx(lon - dLon), x1 = tx(lon + dLon), y0 = ty(lat + dLat), y1 = ty(lat - dLat);
-  const cols = x1 - x0 + 1, rows = y1 - y0 + 1;
-  const canvas = document.createElement('canvas');
-  canvas.width = cols * 256; canvas.height = rows * 256;
-  const g = canvas.getContext('2d');
-  g.fillStyle = '#7a6a60'; g.fillRect(0, 0, canvas.width, canvas.height);
-  let done = 0;
-  const jobs = [];
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const url = SWISSTOPO.swissimage.replace('{z}', zoom).replace('{x}', x).replace('{y}', y);
-    jobs.push(new Promise((res) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => { g.drawImage(img, (x - x0) * 256, (y - y0) * 256); done++; onProgress?.(done / jobs.length); res(); };
-      img.onerror = () => { done++; res(); };
-      img.src = url;
-    }));
-  }
-  await Promise.all(jobs);
-  const tileLon = (x) => (x / n) * 360 - 180;
-  const tileLat = (y) => Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) / DEG;
-  const west = frame.toLocal(lat, tileLon(x0), frame.h).x;
-  const east = frame.toLocal(lat, tileLon(x1 + 1), frame.h).x;
-  const north = frame.toLocal(tileLat(y0), lon, frame.h).z;
-  const south = frame.toLocal(tileLat(y1 + 1), lon, frame.h).z;
+// Atlas aus fertigem Canvas setzen (vorberechnete Welten); Koordinaten lokal (x Ost, z Süd)
+export function setOrthoAtlas(canvas, west, east, north, south) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -136,7 +58,6 @@ export async function buildOrthoAtlas(frame, radius, zoom, onProgress) {
   ortho.tex.value = tex;
   ortho.rect.value.set(west, north, 1 / (east - west), 1 / (south - north));
   ortho.on.value = 1;
-  return { canvas, west, east, north, south };
 }
 
 // Fototexturen für Fassaden/Dächer + Stil (0 = Putz, 1 = Sandstein wie in Bern)
@@ -171,7 +92,7 @@ export function patchHideShader(shader) {
     .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + HIDE_GLSL);
 }
 
-function patchBuildingShader(shader) {
+export function patchBuildingShader(shader) {
   shader.uniforms.uHideA = { value: hideA };
   shader.uniforms.uHideB = { value: hideB };
   shader.uniforms.uOrtho = ortho.tex;
@@ -224,7 +145,7 @@ function patchBuildingShader(shader) {
         vec3 wall = h < 0.38 ? pal0 : h < 0.55 ? pal1 : h < 0.68 ? pal2 : h < 0.8 ? pal3 : pal4;
         vec2 wuv = vec2(s, vWPos.y) / 3.5;
         vec3 plasterT = texture2D(uPlaster, wuv).rgb;
-        wall *= 0.55 + 0.6 * plasterT;
+        wall *= (0.42 + 0.62 * plasterT) * 0.9;
         if (uStyle > 0.5) {
           vec3 sandT = texture2D(uSand, vec2(s, vWPos.y) / 4.0).rgb;
           wall = mix(wall, sandT * vec3(0.78, 0.80, 0.72) * 1.15, 0.85);
@@ -256,157 +177,3 @@ function patchBuildingShader(shader) {
       }`);
 }
 
-// Ersetzt die Materialien der Gebäude-Kacheln, bevor das Overlay-Plugin sie erweitert.
-class BuildingStylePlugin {
-  constructor(castShadow = false) { this.name = 'BUILDING_STYLE'; this.priority = -20; this.castShadow = castShadow; }
-  processTileModel(scene) {
-    scene.traverse((o) => {
-      if (!o.isMesh) return;
-      const old = o.material;
-      const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
-      m.onBeforeCompile = patchBuildingShader;
-      m.customProgramCacheKey = () => 'mk-building' + (o.geometry.attributes._batchid ? 'b' : '');
-      if (o.geometry.attributes._batchid) m.defines = { HAS_BATCHID: '' };
-      o.material = m;
-      old?.dispose?.();
-      o.receiveShadow = true;
-      o.castShadow = this.castShadow;
-      o.userData.isBuilding = true;
-    });
-  }
-}
-
-// Unterdrückt Kacheln ausserhalb einer Kugel; innerhalb entscheidet die normale Kamera-Logik.
-class RadiusLimitPlugin {
-  constructor(sphere) { this.name = 'RADIUS_LIMIT'; this.sphere = sphere; }
-  calculateTileViewError(tile, target) {
-    const bv = tile.engineData?.boundingVolume;
-    if (!bv || bv.intersectsSphere(this.sphere)) return false;
-    target.inView = false;
-    target.error = 0;
-    target.distance = Infinity;
-    return true;
-  }
-}
-
-export class GeoWorld {
-  constructor({ scene, camera, renderer, level, quality }) {
-    this.scene = scene;
-    this.camera = camera;
-    this.renderer = renderer;
-    this.level = level;
-    this.frame = new GeoFrame(level.lat, level.lon, level.h);
-    this.root = new THREE.Group();
-    this.root.name = 'geo';
-    scene.add(this.root);
-    setHideBoxes([]);
-
-    // Gelände: swissALTI3D (quantized-mesh) + SWISSIMAGE
-    const terrain = new TilesRenderer(SWISSTOPO.terrain);
-    terrain.registerPlugin(new QuantizedMeshPlugin({ useRecommendedSettings: true }));
-    terrain.registerPlugin(new ImageOverlayPlugin({ overlays: [swissimage()], resolution: quality.overlayRes }));
-    terrain.registerPlugin(new TilesFadePlugin());
-    terrain.errorTarget = quality.terrainError;
-    terrain.setCamera(camera);
-    terrain.setResolutionFromRenderer(camera, renderer);
-    terrain.addEventListener('load-model', ({ scene: s }) => {
-      s.traverse((o) => {
-        if (o.isMesh) {
-          o.receiveShadow = true;
-          o.userData.isTerrain = true;
-          if (o.material) { o.material.roughness = 0.95; o.material.metalness = 0; }
-        }
-      });
-    });
-    this.frame.applyTo(terrain.group);
-    this.root.add(terrain.group);
-    this.terrain = terrain;
-
-    // Gebäude: swissBUILDINGS3D (Draco-komprimiert), Dächer mit Luftbild
-    if (quality.buildings) {
-      const buildings = new TilesRenderer(SWISSTOPO.buildings);
-      buildings.registerPlugin(new GLTFExtensionsPlugin({ dracoLoader, autoDispose: false }));
-      buildings.registerPlugin(new BuildingStylePlugin(!!quality.buildingShadows));
-      const center = new THREE.Vector3(0, 0, 0).applyMatrix4(this.frame.localToEcef);
-      buildings.registerPlugin(new RadiusLimitPlugin(new THREE.Sphere(center, quality.buildingRadius || 2500)));
-      buildings.registerPlugin(new TilesFadePlugin());
-      buildings.errorTarget = quality.buildingError;
-      buildings.setCamera(camera);
-      buildings.setResolutionFromRenderer(camera, renderer);
-      this.frame.applyTo(buildings.group);
-      this.root.add(buildings.group);
-      this.buildings = buildings;
-    }
-
-    // Vegetation: swisstopo-Bäume (instanzierte 3D-Modelle, i3dm)
-    if (quality.trees) {
-      const veg = new TilesRenderer(SWISSTOPO.vegetation);
-      veg.registerPlugin(new GLTFExtensionsPlugin({ dracoLoader, autoDispose: false }));
-      const center = new THREE.Vector3(0, 0, 0).applyMatrix4(this.frame.localToEcef);
-      veg.registerPlugin(new RadiusLimitPlugin(new THREE.Sphere(center, quality.treeRadius)));
-      veg.registerPlugin(new TilesFadePlugin());
-      veg.errorTarget = quality.treeError;
-      veg.setCamera(camera);
-      veg.setResolutionFromRenderer(camera, renderer);
-      veg.addEventListener('load-model', ({ scene: s }) => {
-        s.traverse((o) => {
-          if (!o.isMesh) return;
-          o.castShadow = !!quality.treeShadows;
-          o.receiveShadow = true;
-          o.userData.isTree = true;
-          const m = o.material;
-          if (m) {
-            m.roughness = 0.95; m.metalness = 0;
-            if (m.map) m.alphaTest = 0.4;
-            m.onBeforeCompile = patchHideShader;
-            m.customProgramCacheKey = () => 'mk-tree';
-            m.needsUpdate = true;
-          }
-        });
-      });
-      this.frame.applyTo(veg.group);
-      this.root.add(veg.group);
-      this.vegetation = veg;
-    }
-
-    this.raycaster = new THREE.Raycaster();
-    this.raycaster.firstHitOnly = true;
-  }
-
-  update() {
-    this.camera.updateMatrixWorld();
-    this.terrain.setResolutionFromRenderer(this.camera, this.renderer);
-    this.terrain.update();
-    for (const t of [this.buildings, this.vegetation]) {
-      if (!t) continue;
-      t.setResolutionFromRenderer(this.camera, this.renderer);
-      t.update();
-    }
-  }
-
-  get loadProgress() {
-    const a = this.terrain.loadProgress;
-    const b = this.buildings ? this.buildings.loadProgress : 1;
-    const c = this.vegetation ? this.vegetation.loadProgress : 1;
-    return (a + b + c) / 3;
-  }
-
-  // Höhe des Geländes (und optional Gebäude/Objekte) unter einem Punkt
-  groundHeight(x, z, includeBuildings = false, extra = []) {
-    const r = this.raycaster;
-    r.set(new THREE.Vector3(x, 9000, z), new THREE.Vector3(0, -1, 0));
-    r.far = 20000;
-    const targets = [this.terrain.group];
-    if (includeBuildings && this.buildings) targets.push(this.buildings.group);
-    for (const e of extra) targets.push(e);
-    const hits = r.intersectObjects(targets, true);
-    return hits.length ? hits[0].point.y : null;
-  }
-
-  dispose() {
-    this.terrain.dispose();
-    if (this.buildings) this.buildings.dispose();
-    if (this.vegetation) this.vegetation.dispose();
-    this.scene.remove(this.root);
-  }
-}

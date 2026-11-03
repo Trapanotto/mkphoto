@@ -13,15 +13,17 @@ WIDTH = 3.4
 
 
 def build(L):
-    stone = L.mat('stone_wasserturm', (0.55, 0.42, 0.30), meters=4.0)
+    stone = L.mat('stone_wasserturm', (0.62, 0.60, 0.56), meters=4.0)
     stone_l = L.mat('sandstone_old', (0.65, 0.58, 0.45), meters=3.0)
-    roof = L.mat('roof_red', (0.55, 0.30, 0.20), meters=2.2)
-    roof_t = L.mat('roof_clay', (0.45, 0.22, 0.15), meters=2.2)
+    roof = L.mat('roof_moss', (0.42, 0.32, 0.24), meters=2.2)
+    roof_t = L.mat('roof_dark', (0.40, 0.26, 0.18), meters=2.2)
     boards = L.mat('wood_weathered', (0.30, 0.22, 0.15), meters=2.0)
     deck = L.mat('wood_deck', (0.40, 0.32, 0.24), meters=2.5)
     beam = L.mat('wood_dark', (0.22, 0.14, 0.08), meters=1.5)
     pile = L.mat('wood_rough', (0.20, 0.17, 0.14), meters=2.0)
     flowers = L.mat('flowers_red', (0.75, 0.06, 0.06), meters=1.0)
+    flowers2 = L.mat('flowers_pink', (0.85, 0.3, 0.5), meters=1.0)
+    flowers3 = L.mat('flowers_yellow', (0.95, 0.75, 0.1), meters=1.0)
     leaves = L.mat('leaves', (0.12, 0.30, 0.08), meters=1.0)
     glass = L.mat('glass', (0.05, 0.06, 0.08), rough=0.1)
     dark = L.mat('dark', (0.03, 0.03, 0.035))
@@ -55,7 +57,8 @@ def build(L):
             L.box(f'{n}_flowerbox{side}', (*c, RAIL_TOP - 0.2), (Ls - 0.8, 0.34, 0.3), beam, bridge, rot_z=ang)
             a_ = at(0.5, side * (WIDTH / 2 + 0.26)); b_ = at(Ls - 0.5, side * (WIDTH / 2 + 0.26))
             L.blobs(f'{n}_leaves{side}', a_, b_, RAIL_TOP + 0.02, int(Ls * 3.2), 0.16, leaves, bridge, jitter=0.3, seed=si * 7 + side)
-            L.blobs(f'{n}_flowers{side}', a_, b_, RAIL_TOP + 0.14, int(Ls * 2.6), 0.12, flowers, bridge, jitter=0.32, seed=si * 13 + side)
+            for fi, fm in enumerate((flowers, flowers2, flowers3)):
+                L.blobs(f'{n}_flowers{side}_{fi}', a_, b_, RAIL_TOP + 0.14, int(Ls * (1.4, 0.8, 0.6)[fi]), 0.12, fm, bridge, jitter=0.32, seed=si * 13 + side * 5 + fi)
             # Pfette + Pfosten mit Kopfbändern
             c = at(Ls / 2, side * (WIDTH / 2 - 0.05))
             L.box(f'{n}_plate{side}', (*c, EAVE - 0.1), (Ls + 2 * ext, 0.2, 0.2), beam, bridge, rot_z=ang)
