@@ -150,7 +150,9 @@ export function patchBuildingShader(shader) {
         float wa = floor(atan(n.x, -n.z) * 114.59156 + 0.5) / 114.59156;
         vec2 t2 = vec2(cos(wa), sin(wa));
         float s = dot(vWPos.xz, t2);
-        float h = hash2(vec2(vBid * 0.618 + floor(vWPos.x / 300.0), floor(vWPos.z / 300.0) + vBid * 0.31));
+        // A building must retain its colour and window layout when a facade
+        // crosses a 300 m world-grid boundary.
+        float h = hash2(vec2(vBid * 0.618, vBid * 0.31));
         float h2 = hash2(vec2(h * 91.3, vBid + 7.0));
         float rel = vRel;
         // ---------- Fassade

@@ -22,6 +22,8 @@ export const LEVELS = [
     landmarks: [
       { id: 'kapellbruecke', name: 'Kapellbrücke & Wasserturm', model: 'models/kapellbruecke.glb', lat: 47.05165, lon: 8.30755, heading: 0, base: 'water' },
       { id: 'stege', name: 'Seebrücke & Rathaussteg', model: 'models/luzern_stege.glb', lat: 47.05165, lon: 8.30755, heading: 0, base: 'water' },
+      // Rathausquai liegt ca. 1.15 m über dem Gelände-Niveau am Wasser.
+      { id: 'rathausturm', name: 'Rathaus & Rathausturm', model: 'models/rathausturm.glb', lat: 47.0520606, lon: 8.3061397, heading: 0, base: 'water', yOffset: 1.15 },
     ],
     subjects: [
       { id: 'bruecke', landmark: 'kapellbruecke', node: 'Bruecke' },
