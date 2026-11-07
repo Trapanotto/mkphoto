@@ -42,7 +42,7 @@ export const WATER_FS = /* glsl */`
            + nrm(r1 * (p - f * 0.9) / 4.3 - time * vec2(0.01, -0.006)) * 0.35
            + nrm(r2 * (p - f * 1.1) / 1.6 + time * vec2(-0.02, 0.015)) * 0.22 * (1.0 - smoothstep(25.0, 140.0, dist))
            + nrm((p - f * 0.6) / 47.0) * 0.3;
-    float k = mix(0.26, 0.06, smoothstep(20.0, 2500.0, dist)) * size;
+    float k = mix(0.17, 0.055, smoothstep(20.0, 2500.0, dist)) * size;
     vec3 N = normalize(vec3(w.x * k, 1.0, w.y * k));
 
     float cosT = clamp(dot(N, V), 0.0, 1.0);
@@ -54,11 +54,14 @@ export const WATER_FS = /* glsl */`
       vec3 rdir = reflect(-V, N);
       vec3 refl = mix(uSkyH, uSkyZ, pow(clamp(rdir.y, 0.0, 1.0), 0.5)) * 1.0;
     #else
-      vec2 ruv = mirrorCoord.xy / mirrorCoord.w + N.xz * distortionScale * 0.05 / (1.0 + dist * 0.015);
-    float bl = 0.0015 + 0.004 * smoothstep(50.0, 1500.0, dist);
-    vec3 refl = texture2D(mirrorSampler, ruv).rgb * 0.4
-              + (texture2D(mirrorSampler, ruv + vec2(bl, 0.0)).rgb + texture2D(mirrorSampler, ruv - vec2(bl, 0.0)).rgb
-              + texture2D(mirrorSampler, ruv + vec2(0.0, bl)).rgb + texture2D(mirrorSampler, ruv - vec2(0.0, bl)).rgb) * 0.15;
+      vec2 ruv = mirrorCoord.xy / mirrorCoord.w + N.xz * distortionScale * 0.035 / (1.0 + dist * 0.015);
+      // Kleine, vorwiegend horizontale Streuung bricht scharfe Spiegelkanten,
+      // ohne nahe Fassaden zu einem gleichmässigen Schleier zu verwischen.
+      float bl = mix(0.0007, 0.0028, smoothstep(20.0, 700.0, dist));
+      ruv = clamp(ruv, vec2(bl * 2.0), vec2(1.0 - bl * 2.0));
+      vec3 refl = texture2D(mirrorSampler, ruv).rgb * 0.40
+                + (texture2D(mirrorSampler, ruv + vec2(bl * 1.5, 0.0)).rgb + texture2D(mirrorSampler, ruv - vec2(bl * 1.5, 0.0)).rgb) * 0.20
+                + (texture2D(mirrorSampler, ruv + vec2(0.0, bl * 0.6)).rgb + texture2D(mirrorSampler, ruv - vec2(0.0, bl * 0.6)).rgb) * 0.10;
 
     #endif
     // Wasserkörper: Flachwasser am Ufer heller und grüner, Tiefe dunkel; Licht von oben streut hinein
@@ -74,12 +77,12 @@ export const WATER_FS = /* glsl */`
     // Sonne: scharfes Glitzern + breiter Schein
     vec3 H = normalize(sunDirection + V);
     float nh = max(dot(N, H), 0.0);
-    float spec = pow(nh, 900.0) * 60.0 + pow(nh, 90.0) * 0.8;
+    float spec = pow(nh, 900.0) * 20.0 + pow(nh, 90.0) * 0.5;
     vec3 col = mix(bodyLit, refl, F) + sunColor * spec * sh * (0.3 + F);
 
     // Uferlinie: schmaler, etwas hellerer Saum
     float edge = 1.0 - smoothstep(0.0, 0.035, shore);
-    col = mix(col, col * 1.12 + uShallow * 0.25, edge * 0.6);
+    col = mix(col, col * 1.04 + uShallow * 0.08, edge * 0.45);
 
     gl_FragColor = vec4(col, alpha * smoothstep(0.06, 0.45, m.r));
     #include <tonemapping_fragment>

@@ -182,6 +182,10 @@ export function patchBuildingShader(shader) {
         float win = BOX(fx, x0, x1, fw.x) * BOX(fy, y0, y1, fw.y) * up;
         float frame = BOX(fx, x0 - 0.035, x1 + 0.035, fw.x) * BOX(fy, y0 - 0.03, y1 + 0.03, fw.y) * up - win;
         float sill = BOX(fx, x0 - 0.06, x1 + 0.06, fw.x) * BOX(fy, y0 - 0.075, y0 - 0.03, fw.y) * up;
+        // Ein schmaler Sturz und ein Schatten unter der Fensterbank geben der
+        // ansonsten flachen Gebäudefläche auch aus der Nähe mehr Tiefe.
+        float lintel = BOX(fx, x0 - 0.05, x1 + 0.05, fw.x) * BOX(fy, y1 + 0.03, y1 + 0.065, fw.y) * up;
+        float sillShadow = BOX(fx, x0 - 0.055, x1 + 0.055, fw.x) * BOX(fy, y0 - 0.105, y0 - 0.075, fw.y) * up;
         // Sprossen (Fensterkreuz)
         float mull;
         // Fensternische per Parallaxe: Glas 17 cm hinter der Fassade, die Laibung wird je nach Blickwinkel sichtbar
@@ -240,6 +244,10 @@ export function patchBuildingShader(shader) {
         vec3 skyR = mix(vec3(0.30, 0.33, 0.36), vec3(0.62, 0.74, 0.88), clamp(rd.y * 1.6 + 0.35, 0.0, 1.0));
         float wh = hash2(floor(vec2(cx, cy)) + vBid);
         vec3 inter = wh < 0.25 ? vec3(0.55, 0.50, 0.42) * 0.55 : wh < 0.4 ? vec3(0.78, 0.74, 0.66) * 0.6 : vec3(0.05, 0.05, 0.06) + 0.04 * wh;
+        // Einzelne helle Vorhänge statt identischer leerer Fenster.
+        float curtains = step(0.55, wh) * (BOX(gq.x, x0 + 0.025, x0 + ww * 0.48, fw.x)
+          + BOX(gq.x, x1 - ww * 0.48, x1 - 0.025, fw.x)) * inG;
+        inter = mix(inter, vec3(0.56, 0.53, 0.47), clamp(curtains * 0.55, 0.0, 1.0));
         vec3 glass = mix(inter, skyR, 0.18 + 0.7 * fres);
         vec3 frameC = mix(frameStone, vec3(0.35, 0.24, 0.16), step(0.8, fract(h2 * 13.0)));
         glass = mix(glass, frameC * 0.85, clamp(mull, 0.0, 1.0));
@@ -250,11 +258,12 @@ export function patchBuildingShader(shader) {
         float far = smoothstep(0.18, 0.45, max(fw.x, fw.y));
         vec3 fac = wall;
         fac *= 1.0 - 0.18 * grime;
+        fac *= 1.0 - 0.22 * sillShadow;
         fac = mix(fac, fac * 1.12 + 0.03, clamp(corn, 0.0, 1.0));
         fac *= 1.0 - 0.25 * cornSh;
         fac = mix(fac, mix(vec3(0.92, 0.9, 0.86) * (0.8 + 0.3 * plasterT), fac, 0.25), hasFw * up);
         fac = mix(fac, vec3(0.20, 0.13, 0.08), clamp(beams, 0.0, 1.0));
-        fac = mix(fac, frameC, clamp(frame + sill * 0.7, 0.0, 1.0));
+        fac = mix(fac, frameC, clamp(frame + sill * 0.7 + lintel * 0.65, 0.0, 1.0));
         fac = mix(fac, mix(vec3(0.30, 0.18, 0.10), flC, step(0.3, fn)), clamp(fbox, 0.0, 1.0));
         fac = mix(fac, shutC, clamp(shut, 0.0, 1.0));
         fac = mix(fac, glass, clamp(win, 0.0, 1.0));
