@@ -36,6 +36,9 @@ tatsächlichen Desktop und einem Handy ist weiterhin nötig.
 - [W. Bulach, Ansicht von der Kapellbrücke auf das Rathaus](https://commons.wikimedia.org/wiki/File:00_0128_Rathaus_Luzern_-_Luegislandturm_-_Museggmauer.jpg),
   CC BY-SA 4.0, Foto von 2019. Die Bildseite als Referenz verwenden; das Bild
   wird nicht als Spieltextur übernommen.
+- [A.Savin, Wikipedia: Altes Rathaus, 2022](https://commons.wikimedia.org/wiki/File:Luzern_asv2022-10_Rathaus_img1.jpg),
+  Free Art License. Referenz für Steinmaterial, die zwei unterschiedlichen
+  Fensterreihen, Arkaden und Dachgauben; nicht als Textur übernommen.
 - [Ymblanter, Rathausquai](https://commons.wikimedia.org/wiki/File:Lucerne_Rathausquai.jpg),
   CC BY-SA 4.0, Foto von 2020; Referenz für die Häuserzeile.
 - Die [Zunft zu Pfistern](https://zunft-zu-pfistern.ch/Geschichte-Zunfthaus-Pfistern-Luzern/Fassaden/)

@@ -44,11 +44,14 @@ def build(L):
     blue = L.mat('rathaus_clock_blue', (0.06, 0.14, 0.35))
     red = L.mat('rathaus_clock_red', (0.42, 0.12, 0.09))
     gold = L.mat('gold', (0.75, 0.60, 0.22), metal=1.0)
-    wall = L.mat('rathaus_plaster', (0.78, 0.71, 0.59), meters=3.5)
+    wall = L.mat('rathaus_stone', (0.70, 0.68, 0.62), meters=4.0)
     frame = L.mat('sandstone_light', (0.72, 0.69, 0.61), meters=3.0)
     glass = L.mat('rathaus_glass', (0.20, 0.26, 0.30), rough=0.3)
     tiles = L.mat('rathaus_roof_tile', (0.47, 0.25, 0.19), meters=2.0)
     paving = L.mat('cobble', (0.45, 0.43, 0.39), meters=3.0)
+    flag_red = L.mat('flag_red', (0.8, 0.03, 0.03))
+    flag_white = L.mat('flag_white', (0.95, 0.95, 0.92))
+    flag_blue = L.mat('flag_luzern_blue', (0.05, 0.2, 0.55))
     root = L.empty('Rathausturm')
     L.box('tower_shaft', (0, 0, 15.5), (8.1, 8.4, 31.0), stone, root, rot_z=ANGLE)
     L.box('tower_cornice', (0, 0, 30.9), (8.8, 9.1, 0.4), edge, root, rot_z=ANGLE)
@@ -90,14 +93,14 @@ def build(L):
         L.beam_between(f'clock_hand{k}', clock + normal * 0.07,
                        clock + normal * 0.07 + direction * length, 0.09, gold, root)
     L.merge_children(root)
-    rathaus(L, wall, frame, glass, dark, tiles, paving)
+    rathaus(L, wall, frame, glass, dark, tiles, paving, flag_red, flag_white, flag_blue)
     # The replacement should only mask the tower's footprint, not the Rathaus.
     # Allow for small footprint differences between OSM and the pre-baked
     # swissBUILDINGS3D surface; otherwise the old wall shows through.
     L.hide_box('Hide_rathausturm', (0, 0, 21), (11.0, 11.4, 44), rot_z=ANGLE)
 
 
-def rathaus(L, wall, frame, glass, dark, tiles, paving):
+def rathaus(L, wall, frame, glass, dark, tiles, paving, flag_red, flag_white, flag_blue):
     """Main Rathaus volume and riverside arcade, positioned from OSM.
 
     The shaped arcade and roof are an approximation for the first visual
@@ -112,6 +115,7 @@ def rathaus(L, wall, frame, glass, dark, tiles, paving):
     L.box('rathaus_paving', (center.x, center.y, 0.03), (length, depth, 0.16), paving, root, rot_z=ANGLE)
     L.box('rathaus_upper', (center.x, center.y, 10.2), (length, depth, 10.4), wall, root, rot_z=ANGLE)
     L.box('rathaus_floor_band', (center.x, center.y, 5.0), (length + 0.2, depth + 0.2, 0.25), frame, root, rot_z=ANGLE)
+    L.box('rathaus_middle_band', (center.x, center.y, 9.65), (length + 0.15, depth + 0.15, 0.22), frame, root, rot_z=ANGLE)
     L.box('rathaus_eave_band', (center.x, center.y, 15.25), (length + 0.4, depth + 0.4, 0.3), frame, root, rot_z=ANGLE)
     # Lower side and rear walls; the river side is an open arcade.
     back = center - normal * (depth / 2 - 0.15)
@@ -142,9 +146,27 @@ def rathaus(L, wall, frame, glass, dark, tiles, paving):
             L.beam_between(f'arcade_arch{i}_{j}', points[j], points[j + 1], 0.18, frame, root)
     p0 = front - along * (length / 2) + normal * 0.16
     p1 = front + along * (length / 2) + normal * 0.16
-    L.facade('rathaus_windows', (p0.x, p0.y), (p1.x, p1.y), glass, frame, root,
-             floors=2, spacing=4.0, win_w=1.35, win_h=2.25, z_start=6.2, floor_h=3.8,
-             margin=2.2, sill=(frame, 0.25))
+    # The lower row has round arches; the upper row is rectangular.
+    L.facade('rathaus_round_windows', (p0.x, p0.y), (p1.x, p1.y), glass, frame, root,
+             floors=1, spacing=3.5, win_w=1.3, win_h=2.35, z_start=6.1,
+             margin=1.8, arch='round', sill=(frame, 0.25))
+    L.facade('rathaus_upper_windows', (p0.x, p0.y), (p1.x, p1.y), glass, frame, root,
+             floors=1, spacing=3.5, win_w=1.3, win_h=2.15, z_start=10.2,
+             margin=1.8, sill=(frame, 0.25), lintel=(frame, 0.22))
+    # The reference shows the Swiss and Lucerne flags on projecting poles.
+    for i, offset in enumerate((-5.0, 5.0)):
+        pole_base = front + along * offset + normal * 0.25 + Vector((0, 0, 9.7))
+        pole_tip = pole_base + normal * 2.0 + Vector((0, 0, 1.7))
+        L.beam_between(f'flag_pole{i}', pole_base, pole_tip, 0.07, frame, root)
+        p = pole_tip + along * 0.55
+        if i == 0:
+            L.box('swiss_flag', (p.x, p.y, p.z - 0.65), (1.1, 0.06, 1.3), flag_red, root, rot_z=ANGLE)
+            q = p + normal * 0.045
+            L.box('swiss_cross_v', (q.x, q.y, p.z - 0.65), (0.18, 0.03, 0.65), flag_white, root, rot_z=ANGLE)
+            L.box('swiss_cross_h', (q.x, q.y, p.z - 0.65), (0.58, 0.03, 0.18), flag_white, root, rot_z=ANGLE)
+        else:
+            L.box('luzern_flag_white', (p.x, p.y, p.z - 0.325), (1.1, 0.06, 0.65), flag_white, root, rot_z=ANGLE)
+            L.box('luzern_flag_blue', (p.x, p.y, p.z - 0.975), (1.1, 0.06, 0.65), flag_blue, root, rot_z=ANGLE)
     L.hip_roof('rathaus_roof', (center.x, center.y, 0), length + 1.6, depth + 1.6,
                15.35, 8.4, tiles, root, rot=ANGLE, ridge_frac=0.66, overhang=0.0)
     # Low riverside dormers break up the broad roof silhouette.
