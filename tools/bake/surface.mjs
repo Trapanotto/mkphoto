@@ -5,7 +5,7 @@
 // (ohne Alphakanal: Browser/sharp würden RGB bei Alpha 0 verwerfen)
 // Ringe: core (Kern, fein), mid, far. Norden oben, Quadrat um (E0, N0) mit Halbkante des Rings.
 import sharp from 'sharp';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { bakeConfig, ALL_IDS } from './config.mjs';
 import { toWGS84 } from './lv95.mjs';
 import { features } from './vt.mjs';
@@ -42,6 +42,8 @@ async function ring(cfg, name, half, size, z, withRoads) {
   const { list, tiles } = await features(E0 - half - pad, N0 - half - pad, E0 + half + pad, N0 + half + pad, z,
     ['landcover', 'landuse', 'transportation', 'water', 'waterway', 'building'], toWGS84);
   const L = { asph: [], side: [], grav: [], cob: [], wood: [], water: [], ice: [], res: [], bld: [] };
+  const net = { roads: [], walks: [] };   // Netz für Verkehr und Fussgänger (nur Kern)
+  const loc = (geom) => geom.map((ln) => ln.flatMap(([E, N]) => [+(E - E0).toFixed(1), +(-(N - N0)).toFixed(1)]));
   for (const f of list) {
     const c = f.props.class, br = f.props.brunnel;
     if (f.layer === 'transportation') {
@@ -52,6 +54,10 @@ async function ring(cfg, name, half, size, z, withRoads) {
         continue;
       }
       const d = svgPath(f.geom, false, tx);
+      if (withRoads && name === 'core') {
+        if (ROAD_W[c] && c !== 'cycleway') for (const l of loc(f.geom)) net.roads.push([c, ROAD_W[c], l]);
+        else if (['footway', 'pedestrian', 'path', 'steps'].includes(c)) for (const l of loc(f.geom)) net.walks.push([c, l]);
+      }
       if (ROAD_W[c]) {
         L.asph.push({ d, stroke: ROAD_W[c] / mpp });
         if (SIDEWALK[c]) L.side.push({ d, stroke: (ROAD_W[c] + 2 * SIDEWALK[c]) / mpp });
@@ -71,7 +77,8 @@ async function ring(cfg, name, half, size, z, withRoads) {
     } else if (f.layer === 'water' && f.type === 3) {
       L.water.push({ d: svgPath(f.geom, true, tx) });
     } else if (f.layer === 'waterway' && f.type === 2 && br !== 'tunnel') {
-      const w = c === 'river' ? 14 : c === 'canal' ? 8 : 2;
+      if (c !== 'river' && c !== 'canal') continue;   // Bäche nicht: schmale Spiegelstreifen an Hängen
+      const w = c === 'river' ? 14 : 8;
       L.water.push({ d: svgPath(f.geom, false, tx), stroke: w / mpp });
     }
   }
@@ -105,6 +112,15 @@ async function ring(cfg, name, half, size, z, withRoads) {
       if (a > 127) ca++; if (s > 127) cs++;
     }
     await save(roads, `surf_${name}_roads`, size / 2);
+    if (name === 'core') {
+      // Siedlungsflag je Strasse (Mittelpunkt im Wohngebiet?) -> dort gehen Fussgänger auf dem Gehweg
+      for (const r of net.roads) {
+        const l = r[2], m = Math.floor(l.length / 4) * 2;
+        const px = Math.floor(((l[m] + half) / (2 * half)) * size), py = Math.floor(((l[m + 1] + half) / (2 * half)) * size);
+        r.push(px >= 0 && py >= 0 && px < size && py < size && res[py * size + px] > 127 ? 1 : 0);
+      }
+      writeFileSync(`${out}/network.json`, JSON.stringify(net));
+    }
     await save(ext, `surf_${name}_ext`, size / 2);
     stat = `, Asphalt ${(100 * ca / n).toFixed(1)} %, Gehweg ${(100 * cs / n).toFixed(1)} %`;
   }

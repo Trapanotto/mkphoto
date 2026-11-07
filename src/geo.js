@@ -1,6 +1,7 @@
 // Gebäude-Shader, Ausblend-Boxen und Hilfen für die vorberechnete Welt (keine Streaming-Abhängigkeiten).
 import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { lifeTime } from './life.js';
 
 export const dracoLoader = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
 
@@ -105,6 +106,7 @@ export function patchBuildingShader(shader) {
   shader.uniforms.uStyle = facadeTex.style;
   shader.uniforms.uPlasterN = facadeTex.plasterN;
   shader.uniforms.uRoofN = facadeTex.roofN;
+  shader.uniforms.uLifeT = lifeTime;
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNrm;\nflat varying float vBid;\nvarying float vRel;\n#ifdef HAS_BATCHID\nattribute float _batchid;\n#endif\n#ifdef HAS_RELH\nattribute float _relh;\n#endif')
     .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -136,6 +138,7 @@ export function patchBuildingShader(shader) {
       uniform sampler2D uSand;
       uniform float uStyle;
       uniform sampler2D uPlasterN, uRoofN;
+      ${CLOUD_GLSL}
       vec2 bUVw, bUVr; vec3 bTw; float bRoof, bGlass;
       float hash2(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }`)
     .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + HIDE_GLSL)
@@ -151,9 +154,12 @@ export function patchBuildingShader(shader) {
         float h2 = hash2(vec2(h * 91.3, vBid + 7.0));
         float rel = vRel;
         // ---------- Fassade
-        vec3 pal0 = vec3(0.84, 0.81, 0.74), pal1 = vec3(0.84, 0.74, 0.56), pal2 = vec3(0.82, 0.66, 0.56);
-        vec3 pal3 = vec3(0.72, 0.75, 0.68), pal4 = vec3(0.78, 0.78, 0.76);
-        vec3 wall = h < 0.38 ? pal0 : h < 0.55 ? pal1 : h < 0.68 ? pal2 : h < 0.8 ? pal3 : pal4;
+        // Schweizer Altstadtfarben: Ocker, Lachs, Hellgelb, Salbei, Taubenblau, Terrakotta, Creme, gebrochenes Weiss
+        int pi = int(floor(h * 12.0));
+        vec3 wall = pi == 0 ? vec3(0.86, 0.66, 0.36) : pi == 1 ? vec3(0.85, 0.58, 0.50) : pi == 2 ? vec3(0.92, 0.83, 0.56)
+          : pi == 3 ? vec3(0.64, 0.72, 0.56) : pi == 4 ? vec3(0.62, 0.70, 0.78) : pi == 5 ? vec3(0.74, 0.45, 0.33)
+          : pi == 6 ? vec3(0.90, 0.86, 0.74) : pi == 7 ? vec3(0.80, 0.52, 0.40) : pi == 8 ? vec3(0.93, 0.90, 0.84)
+          : pi == 9 ? vec3(0.78, 0.74, 0.66) : pi == 10 ? vec3(0.88, 0.76, 0.58) : vec3(0.70, 0.66, 0.72);
         vec3 plasterT = texture2D(uPlaster, vec2(s, vWPos.y) / 3.5).rgb;
         wall *= (0.5 + 0.55 * plasterT) * 0.88;
         if (uStyle > 0.5) {
@@ -201,9 +207,33 @@ export function patchBuildingShader(shader) {
         float cornSh = BOX(fy, 0.93, 1.0, fw.y) * hasC * up;
         // Schmutzfahnen unter den Fensterbänken
         float grime = BOX(fx, x0, x1, fw.x) * smoothstep(y0 - 0.32, y0 - 0.08, fy) * (1.0 - step(y0 - 0.075, fy)) * up;
+        // Fachwerk bei etwa jedem achten kleineren Gebäude: dunkle Balken auf hellem Putz
+        float hasFw = step(0.875, fract(h2 * 23.7)) * step(uStyle, 0.5);
+        float bw = 0.035;
+        float beams = max(max(BOX(fx, 0.0, bw, fw.x) + BOX(fx, 1.0 - bw, 1.0, fw.x), BOX(fy, 0.0, bw * 1.6, fw.y) + BOX(fy, 0.97, 1.0, fw.y)),
+                          BOX(fx, x0 - 0.1, x0 - 0.1 + bw, fw.x) + BOX(fx, x1 + 0.1 - bw, x1 + 0.1, fw.x));
+        float dg = abs((fx < x0 - 0.1 ? fx / max(x0 - 0.1, 0.01) : (1.0 - fx) / max(1.0 - x1 - 0.1, 0.01)) - fy);
+        beams = max(beams, (1.0 - smoothstep(0.03, 0.06, dg)) * step(fy, y0 - 0.02 + 0.8) * (1.0 - BOX(fx, x0 - 0.1, x1 + 0.1, fw.x)));
+        beams *= hasFw * up;
+        // Blumenkisten mit Geranien unter den Fenstern
+        float hasFl = step(0.6, fract(h2 * 31.3)) * up;
+        float fbox = BOX(fx, x0 - 0.02, x1 + 0.02, fw.x) * BOX(fy, y0 - 0.17, y0 - 0.075, fw.y) * hasFl;
+        float fn = hash2(floor(vec2(s * 9.0, rel * 9.0)));
+        vec3 flC = fn < 0.45 ? vec3(0.75, 0.06, 0.05) : fn < 0.6 ? vec3(0.85, 0.30, 0.50) : vec3(0.10, 0.28, 0.07);
+        // Fenstergewände: Sandstein, Weiss oder Grau je Gebäude
+        float gp = fract(h2 * 41.0);
+        vec3 frameStone = gp < 0.4 ? vec3(0.93, 0.92, 0.88) : gp < 0.7 ? vec3(0.74, 0.66, 0.52) : vec3(0.58, 0.58, 0.56);
         // Erdgeschoss: Schaufenster und Türen
         float shop = BOX(fract(cx * 0.5), 0.1, 0.9, fw.x * 0.5) * BOX(rel, 0.55, 2.95, fw.y * fh) * ground;
         float door = step(0.82, hash2(floor(vec2(cx * 0.5, 3.0)) + vBid)) * shop;
+        // Markisen und Ladenschilder über den Schaufenstern
+        float sCell = floor(cx * 0.5);
+        float hasAw = step(0.55, hash2(vec2(sCell, vBid * 0.7))) * ground;
+        float awn = BOX(fract(cx * 0.5), 0.08, 0.92, fw.x * 0.5) * BOX(rel, 2.95, 3.45, fw.y * fh) * hasAw;
+        vec3 awC = mix(vec3(0.62, 0.12, 0.10), vec3(0.12, 0.30, 0.20), step(0.5, hash2(vec2(sCell * 1.3, vBid))));
+        awC = mix(awC, vec3(0.92, 0.9, 0.85), step(0.5, fract(fract(cx * 0.5) * 10.0)) * step(0.4, hash2(vec2(vBid, sCell))));
+        float shopSign = BOX(fract(cx * 0.5), 0.2, 0.8, fw.x * 0.5) * BOX(rel, 3.05, 3.4, fw.y * fh) * ground * (1.0 - hasAw) * step(0.4, hash2(vec2(sCell, vBid * 1.9)));
+        float letters = step(0.5, hash2(floor(vec2(s * 5.0, rel * 6.0)))) * BOX(rel, 3.12, 3.32, fw.y * fh);
         vec3 vdir = normalize(vWPos - cameraPosition);
         float fres = pow(1.0 - abs(dot(vdir, n)), 3.0);
         vec3 rd = reflect(vdir, n);
@@ -211,7 +241,7 @@ export function patchBuildingShader(shader) {
         float wh = hash2(floor(vec2(cx, cy)) + vBid);
         vec3 inter = wh < 0.25 ? vec3(0.55, 0.50, 0.42) * 0.55 : wh < 0.4 ? vec3(0.78, 0.74, 0.66) * 0.6 : vec3(0.05, 0.05, 0.06) + 0.04 * wh;
         vec3 glass = mix(inter, skyR, 0.18 + 0.7 * fres);
-        vec3 frameC = mix(vec3(0.92, 0.91, 0.88), vec3(0.35, 0.24, 0.16), step(0.75, fract(h2 * 13.0)));
+        vec3 frameC = mix(frameStone, vec3(0.35, 0.24, 0.16), step(0.8, fract(h2 * 13.0)));
         glass = mix(glass, frameC * 0.85, clamp(mull, 0.0, 1.0));
         glass = mix(glass, wall * mix(0.72, 0.42, revTop), clamp(revS, 0.0, 1.0));
         vec3 shopG = mix(vec3(0.08, 0.08, 0.09), skyR, 0.25 + 0.6 * fres);
@@ -222,10 +252,15 @@ export function patchBuildingShader(shader) {
         fac *= 1.0 - 0.18 * grime;
         fac = mix(fac, fac * 1.12 + 0.03, clamp(corn, 0.0, 1.0));
         fac *= 1.0 - 0.25 * cornSh;
+        fac = mix(fac, mix(vec3(0.92, 0.9, 0.86) * (0.8 + 0.3 * plasterT), fac, 0.25), hasFw * up);
+        fac = mix(fac, vec3(0.20, 0.13, 0.08), clamp(beams, 0.0, 1.0));
         fac = mix(fac, frameC, clamp(frame + sill * 0.7, 0.0, 1.0));
+        fac = mix(fac, mix(vec3(0.30, 0.18, 0.10), flC, step(0.3, fn)), clamp(fbox, 0.0, 1.0));
         fac = mix(fac, shutC, clamp(shut, 0.0, 1.0));
         fac = mix(fac, glass, clamp(win, 0.0, 1.0));
         fac = mix(fac, shopG, clamp(shop, 0.0, 1.0));
+        fac = mix(fac, awC * (0.85 + 0.15 * fract(rel * 7.0)), clamp(awn, 0.0, 1.0));
+        fac = mix(fac, mix(vec3(0.12, 0.14, 0.18), vec3(0.95, 0.9, 0.75), letters), clamp(shopSign, 0.0, 1.0));
         fac = mix(fac, mix(wall, glass, 0.2) * (1.0 - 0.1 * hasSh), far);
         // Sockel und Bodenschatten
         fac = mix(vec3(0.42, 0.41, 0.39) * (0.7 + 0.5 * plasterT), fac, smoothstep(0.55, 0.75, rel));
@@ -246,7 +281,7 @@ export function patchBuildingShader(shader) {
         vec3 roof = roofTint * (0.3 + 1.7 * tileL);
         vec3 flatC = mix(vec3(0.30, 0.29, 0.27), vec3(0.16, 0.22, 0.10), step(0.75, h2)) * (0.75 + 0.5 * tileL);  // Kies oder begrünt
         roof = mix(roof, flatC, flatR);
-        diffuseColor.rgb = mix(fac, roof, isRoof);
+        diffuseColor.rgb = mix(fac, roof, isRoof) * (1.0 - 0.3 * cloudShadow(vWPos.xz));
         bUVw = vec2(s, vWPos.y) / 3.5; bUVr = ruv; bTw = Tw; bRoof = isRoof;
         bGlass = clamp(win * inG + shop, 0.0, 1.0) * (1.0 - far) * (1.0 - isRoof);
       }`)
@@ -271,6 +306,18 @@ export function patchBuildingShader(shader) {
       }`);
 }
 
+
+// Wolkenschatten: grossräumiges, langsam ziehendes Rauschen (Gelände und Gebäude)
+const CLOUD_GLSL = `
+      uniform float uLifeT;
+      float cH(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+      float cN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(cH(i), cH(i + vec2(1, 0)), f.x), mix(cH(i + vec2(0, 1)), cH(i + vec2(1, 1)), f.x), f.y); }
+      float cloudShadow(vec2 p) {
+        vec2 q = p / 900.0 + uLifeT * vec2(0.0045, 0.0025);
+        float n = cN(q) * 0.55 + cN(q * 2.3 + 7.1) * 0.3 + cN(q * 5.1 + 3.3) * 0.15;
+        return smoothstep(0.52, 0.68, n);
+      }`;
 
 // ---------- Gelände ohne Luftbild: Oberflächen aus der swisstopo-Basiskarte (Strassen, Gehwege, Wege, Wald,
 // Wasser, Gletscher, Siedlung) + Hang/Höhe (Fels, Schnee), gezeichnet mit PBR-Texturen aus einem Textur-Array.
@@ -334,7 +381,7 @@ export async function setTerrainSurface(dir, meta, small, hasWaterPlane = false)
   terrainU.uH0.value = meta.H0;
 }
 
-const TERRAIN_HEAD = `
+const TERRAIN_HEAD = CLOUD_GLSL + `
       varying vec3 vTPos;
       varying vec3 vTNrm;
       precision highp sampler2DArray;
@@ -345,6 +392,7 @@ const TERRAIN_HEAD = `
       const float TLS[9] = float[9](__SCALES__);
       float tW[9];
       vec2 tP, tPx, tPy;
+      vec3 tP3, tPx3, tPy3, tNb;
       float tRough, tWater;
       float hashT(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -356,13 +404,20 @@ const TERRAIN_HEAD = `
         vec2 a = tP * k, b = rot * tP * k * 0.37;
         vec4 x = textureGrad(t, vec3(a, float(l)), tPx * k, tPy * k);
         vec4 y = textureGrad(t, vec3(b, float(l)), rot * tPx * k * 0.37, rot * tPy * k * 0.37);
-        return mix(x, y, 0.35);
+        vec4 top = mix(x, y, 0.35);
+        if (l < 6) return top;
+        // Fels/Schnee: Triplanar-Projektion, sonst wird die Textur an Steilwänden zu Streifen gezogen
+        vec4 sx = textureGrad(t, vec3(tP3.zy * k, float(l)), tPx3.zy * k, tPy3.zy * k);
+        vec4 sz = textureGrad(t, vec3(tP3.xy * k, float(l)), tPx3.xy * k, tPy3.xy * k);
+        return top * tNb.y + sx * tNb.x + sz * tNb.z;
       }
       float edge(float c) { float w = max(fwidth(c) * 0.75, 0.04); return smoothstep(0.5 - w, 0.5 + w, c); }`;
 
 const TERRAIN_COLOR = `
       {
         tP = vTPos.xz; tPx = dFdx(tP); tPy = dFdy(tP);
+        tP3 = vTPos; tPx3 = dFdx(tP3); tPy3 = dFdy(tP3);
+        tNb = pow(abs(normalize(vTNrm)), vec3(4.0)); tNb /= (tNb.x + tNb.y + tNb.z);
         vec2 p = vTPos.xz;
         vec3 R = vec3(0.0), N = vec3(0.0), E = vec3(0.0);
         float mx = max(abs(p.x), abs(p.y));
@@ -386,6 +441,8 @@ const TERRAIN_COLOR = `
         float rock = smoothstep(0.78, 0.58, n.y + (mac - 0.5) * 0.12);
         rock = max(rock, smoothstep(2200.0, 2700.0, alt + mac * 200.0) * smoothstep(0.97, 0.85, n.y));
         float snow = max(ice * smoothstep(0.55, 0.7, n.y + 0.1), smoothstep(3400.0, 3800.0, alt + mac * 300.0) * smoothstep(0.72, 0.86, n.y));
+        // Wanderwege im Fels und auf Gletschern nicht als helle Kiesbänder zeichnen
+        grav *= (1.0 - max(rock, snow)) * (1.0 - smoothstep(2200.0, 2500.0, alt));
         for (int i = 0; i < 9; i++) tW[i] = 0.0;
         float bare = smoothstep(0.62, 0.8, vnoise(p / 7.0) * 0.5 + mac * 0.5) * 0.6;
         tW[8] = bare * (1.0 - forest) * 0.6 + urban * 0.08 * (1.0 - forest);
@@ -424,6 +481,7 @@ const TERRAIN_COLOR = `
         col = mix(col, vec3(0.025, 0.07, 0.075), water);
         tWater = water;
         tRough = mix(mix(0.95, 0.8, clamp(asph + pav + cob, 0.0, 1.0)), 0.08, water);
+        col *= 1.0 - 0.33 * cloudShadow(p);
         diffuseColor.rgb = col;
       }`;
 
@@ -436,7 +494,8 @@ const TERRAIN_NORMAL = `
         nt /= max(ws, 1e-3);
         float fade = (1.0 - smoothstep(60.0, 900.0, length(vTPos - cameraPosition))) * (1.0 - tWater);
         vec3 Nw = normalize(vTNrm);
-        vec3 T = normalize(vec3(1.0, 0.0, 0.0) - Nw * Nw.x);
+        vec3 Tr = vec3(1.0, 0.0, 0.0) - Nw * Nw.x;
+        vec3 T = dot(Tr, Tr) > 1e-4 ? normalize(Tr) : vec3(0.0, 0.0, 1.0);   // senkrechte Flächen: kein NaN
         vec3 Bt = cross(Nw, T);
         vec3 pw = normalize(Nw + (T * nt.x - Bt * nt.y) * 1.1 * fade);
         normal = normalize((viewMatrix * vec4(pw, 0.0)).xyz);
@@ -444,7 +503,7 @@ const TERRAIN_NORMAL = `
       #endif`;
 
 export function patchTerrainShader(shader) {
-  Object.assign(shader.uniforms, terrainU);
+  Object.assign(shader.uniforms, terrainU, { uLifeT: lifeTime });
   shader.defines = shader.defines || {};
   if (terrainLite) shader.defines.TERRAIN_LITE = '';
   shader.vertexShader = shader.vertexShader

@@ -24,6 +24,64 @@ export class WorldFrame {
   }
 }
 
+// Normalen an Kachelrändern über alle Kacheln mitteln: jede Kachel kennt nur ihre eigenen Dreiecke,
+// sonst entsteht entlang jeder Kachelgrenze ein Streifen mit falscher Schattierung (am Matterhorn als Linien sichtbar)
+function stitchNormals(group) {
+  const sum = new Map(), meshes = [];
+  const key = (x, y, z) => `${Math.round(x * 20)},${Math.round(z * 20)}`;
+  const v = new THREE.Vector3(), n = new THREE.Vector3();
+  group.updateMatrixWorld(true);
+  group.traverse((o) => { if (o.isMesh && o.geometry.attributes.normal) meshes.push(o); });
+  for (const o of meshes) {
+    const P = o.geometry.attributes.position, N = o.geometry.attributes.normal, keys = new Array(P.count);
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld);
+      const k = key(v.x, v.y, v.z); keys[i] = k;
+      n.fromBufferAttribute(N, i);
+      const e = sum.get(k);
+      if (e) { e[0] += n.x; e[1] += n.y; e[2] += n.z; e[3]++; } else sum.set(k, [n.x, n.y, n.z, 1]);
+    }
+    o.userData.nkeys = keys;
+  }
+  for (const o of meshes) {
+    const N = o.geometry.attributes.normal, keys = o.userData.nkeys;
+    let ch = false;
+    for (let i = 0; i < N.count; i++) {
+      const e = sum.get(keys[i]);
+      if (e[3] < 2) continue;
+      n.set(e[0], e[1], e[2]).normalize();
+      N.setXYZ(i, n.x, n.y, n.z); ch = true;
+    }
+    if (ch) N.needsUpdate = true;
+    delete o.userData.nkeys;
+  }
+}
+
+// Schürze an den Rändern der Geländekacheln: schliesst Haarrisse zwischen Kacheln (sonst helle Linien vom Himmel)
+function addSkirt(geo, depth) {
+  const pos = geo.attributes.position, nrm = geo.attributes.normal;
+  if (!geo.index) return;
+  const idx = geo.index.array, cnt = new Map();
+  const k = (a, b) => (a < b ? a * 4194304 + b : b * 4194304 + a);
+  for (let i = 0; i < idx.length; i += 3) for (const [a, b] of [[idx[i], idx[i + 1]], [idx[i + 1], idx[i + 2]], [idx[i + 2], idx[i]]]) {
+    const key = k(a, b); const e = cnt.get(key);
+    if (e) e[2]++; else cnt.set(key, [a, b, 1]);
+  }
+  const P = Array.from(pos.array), N = nrm ? Array.from(nrm.array) : null, I = Array.from(idx);
+  let n = pos.count;
+  for (const [a, b, c] of cnt.values()) {
+    if (c !== 1) continue;
+    const a2 = n++, b2 = n++;
+    P.push(pos.getX(a), pos.getY(a) - depth, pos.getZ(a), pos.getX(b), pos.getY(b) - depth, pos.getZ(b));
+    if (N) N.push(nrm.getX(a), nrm.getY(a), nrm.getZ(a), nrm.getX(b), nrm.getY(b), nrm.getZ(b));
+    I.push(a, a2, b, b, a2, b2, a, b, a2, b, b2, a2);   // beidseitig
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  if (N) geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  for (const name of Object.keys(geo.attributes)) if (!['position', 'normal'].includes(name)) geo.deleteAttribute(name);
+  geo.setIndex(I);
+}
+
 export class StaticWorld {
   constructor({ scene, level, quality }) {
     this.scene = scene;
@@ -56,6 +114,7 @@ export class StaticWorld {
       const g = await loader.loadAsync(`${dir}${file}${s}.glb`);
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
+        addSkirt(o.geometry, 25);
         o.material = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
         o.material.onBeforeCompile = patchTerrainShader;
         o.material.customProgramCacheKey = () => 'mk-terrain';
@@ -92,6 +151,52 @@ export class StaticWorld {
     await Promise.all([terrainPart('terrain_core'), terrainPart('terrain_mid'), terrainPart('terrain_far'), buildingsP,
       this.loadTrees(dir).then(step), setTerrainSurface(dir, this.meta, !!this.quality.smallTex, !!this.level.water).then(() => this.buildAtlas(dir)).then(step)]);
     this.root.updateMatrixWorld(true);
+    stitchNormals(this.terrain.group);
+    if (!this.quality.smallTex) await this.loadForestRing(dir).catch((e) => console.warn('Wald', e.message));
+  }
+
+  // Wald im Mittelring (ausserhalb der Einzelbaum-Daten): einfache instanzierte Nadel- und Laubbäume
+  async loadForestRing(dir) {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = `${dir}surf_mid_nat_s.png`; });
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+    const D = g.getImageData(0, 0, c.width, c.height).data, W = c.width;
+    const { core, mid } = this.meta, R = Math.min(mid, 3200), sp = 13;
+    const pts = [];
+    let seed = 99; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let z = -R; z < R; z += sp) for (let x = -R; x < R; x += sp) {
+      if (Math.max(Math.abs(x), Math.abs(z)) < core - 30) continue;
+      const jx = x + (rnd() - 0.5) * sp, jz = z + (rnd() - 0.5) * sp;
+      const u = (jx + mid) / (2 * mid), v = (jz + mid) / (2 * mid);
+      const px = Math.floor(u * W), py = Math.floor(v * W);
+      if (px < 0 || py < 0 || px >= W || py >= W) continue;
+      if (D[(py * W + px) * 4] < 140 || D[(py * W + px) * 4 + 1] > 60) continue;   // Wald, kein Wasser
+      const y = this.groundHeight(jx, jz);
+      if (y === null) continue;
+      pts.push([jx, y, jz, rnd()]);
+    }
+    if (!pts.length) return;
+    const conifer = new THREE.ConeGeometry(0.32, 0.8, 7).translate(0, 0.6, 0);
+    const trunk = new THREE.CylinderGeometry(0.03, 0.04, 0.25, 5).translate(0, 0.12, 0);
+    const broad = new THREE.IcosahedronGeometry(0.34, 1).scale(1, 0.9, 1).translate(0, 0.62, 0);
+    const mk = (geo, color) => new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.95, flatShading: true }), pts.length);
+    const mc = mk(conifer, 0xffffff), mb = mk(broad, 0xffffff), mt = mk(trunk, 0x3b2a1e);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), far = new THREE.Vector3(0, -1e5, 0);
+    const cc = new THREE.Color(), cb = new THREE.Color();
+    pts.forEach(([x, y, z, r], i) => {
+      const h = 16 + r * 14, isC = r < 0.62;
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r * 40);
+      sc.set(h * (0.85 + 0.3 * ((r * 7) % 1)), h, h * (0.85 + 0.3 * ((r * 13) % 1)));
+      p.set(x, y - 0.5, z);
+      m.compose(p, q, sc);
+      mt.setMatrixAt(i, m);
+      mc.setMatrixAt(i, isC ? m : m.clone().setPosition(far));
+      mb.setMatrixAt(i, isC ? m.clone().setPosition(far) : m);
+      cc.setHSL(0.36 + r * 0.04, 0.4, 0.07 + ((r * 17) % 1) * 0.03);
+      cb.setHSL(0.25 + ((r * 11) % 1) * 0.05, 0.42, 0.09 + ((r * 5) % 1) * 0.04);
+      mc.setColorAt(i, cc); mb.setColorAt(i, cb);
+    });
+    for (const x of [mc, mb, mt]) { x.receiveShadow = true; x.computeBoundingSphere(); this.trees.add(x); }
   }
 
   // Kartenbild für die Minikarte aus den Oberflächenkarten (kein Luftbild)

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { upgradeWater } from './water.js';
+import { Life, lifeTime } from './life.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -93,16 +94,16 @@ if (quality.shadows) {
 scene.add(sunLight, sunLight.target);
 const hemi = new THREE.HemisphereLight(0xc8d8f0, 0x6a5e50, 0.6);
 scene.add(hemi);
-scene.fog = new THREE.FogExp2(0xb8c8d8, 0.00004);
+scene.fog = new THREE.FogExp2(0xb8c8d8, 0.000026);
 
 // Nachbearbeitung: weiche Schatten in Ecken (N8AO) auf "Hoch"
 let composer = null, aoPass = null;
 if (quality.ao) {
   composer = new EffectComposer(renderer);
   aoPass = new N8AOPass(scene, camera, innerWidth, innerHeight);
-  aoPass.configuration.aoRadius = 4.0;
+  aoPass.configuration.aoRadius = 5.0;
   aoPass.configuration.distanceFalloff = 1.0;
-  aoPass.configuration.intensity = 2.2;
+  aoPass.configuration.intensity = 3.0;
   aoPass.configuration.gammaCorrection = false;
   aoPass.setQualityMode('Medium');
   composer.addPass(aoPass);
@@ -117,8 +118,8 @@ if (quality.ao) {
       void main() {
         vec3 c = texture2D(tDiffuse, vUv).rgb;
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-        c = mix(vec3(l), c, 1.08);
-        c = (c - 0.5) * 1.05 + 0.5;
+        c = mix(vec3(l), c, 1.18);
+        c = (c - 0.5) * 1.08 + 0.5;
         vec2 d = vUv - 0.5;
         c *= 1.0 - 0.28 * dot(d, d) * 1.6;
         gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
@@ -151,9 +152,10 @@ function setSun(az, el) {
   scene.environment = pmrem.fromScene(envScene).texture;
   scene.environmentIntensity = 0.32;
   sunLight.color.setRGB(1, 0.92 - 0.3 * low, 0.85 - 0.5 * low);
-  sunLight.intensity = 1.6 + 1.0 * Math.sin(Math.max(el, 3) * DEG);
+  sunLight.intensity = 2.1 + 1.5 * Math.sin(Math.max(el, 3) * DEG);
   hemi.intensity = 0.34 + 0.2 * (1 - low);
-  hemi.color.setRGB(0.78 + 0.1 * low, 0.85 - 0.05 * low, 0.95 - 0.2 * low);
+  hemi.color.setRGB(0.80 + 0.1 * low, 0.84 - 0.05 * low, 0.90 - 0.2 * low);
+  hemi.groundColor.setRGB(0.42, 0.37, 0.29);
   scene.fog.color.setRGB(0.70 + 0.15 * low, 0.74, 0.80 - 0.15 * low);
   renderer.toneMappingExposure = 0.58 + 0.08 * low;
   if (game?.water?.material.uniforms?.sunDirection) game.water.material.uniforms.sunDirection.value.copy(sunDir);
@@ -378,6 +380,12 @@ async function startLevel(level, opts = {}) {
       water.position.set(wp.x, wy + 0.35, wp.z);
       scene.add(water);
       game.water = water;
+      if (mask?.image) {
+        const c = document.createElement('canvas'); c.width = mask.image.width; c.height = mask.image.height;
+        const g2 = c.getContext('2d'); g2.drawImage(mask.image, 0, 0);
+        const R = level.water.radius;
+        game.waterMask = { data: g2.getImageData(0, 0, c.width, c.height).data, w: c.width, h: c.height, x0: wp.x - R, z0: wp.z - R, size: 2 * R };
+      }
     }
   }
 
@@ -416,6 +424,10 @@ async function startLevel(level, opts = {}) {
     game.models.add(root);
   }
   setHideBoxes(hideBoxes);
+  // Leben: Verkehr, Fussgänger, Boote, Schwäne, Vögel
+  level.landmarkPos = game.landmarkPts[0] || spawn.clone();
+  game.life = new Life({ scene, world, level, water: game.water, waterMask: game.waterMask, quality });
+  await game.life.init(`${import.meta.env.BASE_URL}world/${level.id}/`).catch((e) => console.warn('Leben', e));
 
   // Motive
   for (const sj of level.subjects) {
@@ -547,6 +559,7 @@ function disposeGame() {
   scene.remove(game.models);
   game.models.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
   if (game.water) scene.remove(game.water);
+  game.life?.dispose();
   for (const nf of game.noFly) scene.remove(nf.mesh);
   game.help.dispose(scene);
   tutorial.active = false;
@@ -884,6 +897,7 @@ function loop() {
     game.battery -= dt * (a.sport || drone.mode === 'sport' ? 1.3 : 1);
     if (game.battery <= 0) { toast(t('batteryEmpty'), 2500); endFlight(); return; }
     if (game.battery < BATTERY_S * 0.2 && !game.lowWarned) { game.lowWarned = true; toast(t('batteryLow'), 2500); }
+    game.life?.update(dt, camera.position);
     if (game.water) {
       if (game.water.userData.reflective) game.water.material.uniforms.time.value += dt * 0.6;
       else game.water.material.normalMap.offset.x += dt * 0.01;

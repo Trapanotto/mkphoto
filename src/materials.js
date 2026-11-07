@@ -1,5 +1,6 @@
 // Material-Bibliothek: Blender-Materialnamen -> PBR-Materialien mit CC0-Fototexturen (Poly Haven).
 import * as THREE from 'three';
+import { lifeTime } from './life.js';
 
 const BASE = `${import.meta.env.BASE_URL}tex/`;
 
@@ -85,6 +86,8 @@ function tex(set, map, srgb) {
   return t;
 }
 
+const WIND = new Set(['leaf_cards', 'needle_cards', 'bark']);
+
 export function getMaterial(key) {
   if (matCache.has(key)) return matCache.get(key);
   const d = LIBRARY[key];
@@ -112,6 +115,25 @@ export function getMaterial(key) {
     m.roughnessMap = tex(d.tex, 'rough', false);
   }
   m.name = key;
+  if (WIND.has(key)) {
+    // Bäume im Wind: Krone schwingt (Höhe² gewichtet), Blätter flattern
+    const leaf = key !== 'bark';
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = lifeTime;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vec3 ip = instanceMatrix[3].xyz;
+          #else
+            vec3 ip = vec3(0.0);
+          #endif
+          float hgt = max(position.y, 0.0);
+          float sw = (sin(uTime * 1.3 + ip.x * 0.21 + ip.z * 0.17) + 0.5 * sin(uTime * 2.1 + ip.x * 0.5 + ip.z * 0.3)) * 0.04 * hgt * hgt;
+          transformed.x += sw; transformed.z += sw * 0.6;
+          ${leaf ? 'transformed += objectNormal * sin(uTime * 6.0 + position.x * 40.0 + position.z * 31.0 + ip.x) * 0.006 * hgt;' : ''}`);
+    };
+    m.customProgramCacheKey = () => 'wind-' + leaf;
+  }
   matCache.set(key, m);
   return m;
 }
