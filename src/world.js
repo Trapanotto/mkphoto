@@ -6,6 +6,7 @@ import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-
 import { dracoLoader, patchBuildingShader, patchTerrainShader, setTerrainSurface, setHideBoxes } from './geo.js';
 import { toLV95 } from './lv95.js';
 import { applyLibrary } from './materials.js';
+import { repairBuildingHeights } from './building-heights.js';
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -129,6 +130,7 @@ export class StaticWorld {
     const loadB = (file) => loader.loadAsync(`${dir}${file}${s}.glb`).then((g) => {
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
+        repairBuildingHeights(o.geometry);
         const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
         const hasBid = !!o.geometry.attributes._batchid;
         const hasRel = !!o.geometry.attributes._relh;
