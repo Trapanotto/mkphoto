@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { upgradeWater } from './water.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { N8AOPass } from 'n8ao';
-import { dracoLoader, setHideBoxes, firstRealHit, setFacadeTextures, setFacadeStyle } from './geo.js';
+import { dracoLoader, setHideBoxes, firstRealHit, setFacadeTextures, setFacadeStyle, initTerrainTextures } from './geo.js';
 import { StaticWorld } from './world.js';
 import { Drone, MODE_ORDER } from './drone.js';
 import { Input } from './input.js';
@@ -64,7 +67,9 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = !!quality.shadows;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 configureMaterials({ mobile: quality.smallTex, maxAnisotropy: renderer.capabilities.getMaxAnisotropy() });
-setFacadeTextures({ plaster: getTexture('plaster_old', 'diff'), roof: getTexture('roof_clay', 'diff'), sand: getTexture('sandstone', 'diff') });
+setFacadeTextures({ plaster: getTexture('plaster_old', 'diff'), roof: getTexture('roof_clay', 'diff'), sand: getTexture('sandstone', 'diff'),
+  plasterN: getTexture('plaster_old', 'nor', false), roofN: getTexture('roof_clay', 'nor', false) });
+initTerrainTextures(!!quality.smallTex);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.5, 120000);   // Drohnenkamera
@@ -101,7 +106,24 @@ if (quality.ao) {
   aoPass.configuration.gammaCorrection = false;
   aoPass.setQualityMode('Medium');
   composer.addPass(aoPass);
+  // Glanzlichter (Sonne im Wasser, Glas) leicht überstrahlen
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.12, 0.4, 7.0));
   composer.addPass(new OutputPass());
+  // Farbabstimmung: etwas Kontrast und Sättigung, leichte Vignette
+  composer.addPass(new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+      void main() {
+        vec3 c = texture2D(tDiffuse, vUv).rgb;
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(l), c, 1.08);
+        c = (c - 0.5) * 1.05 + 0.5;
+        vec2 d = vUv - 0.5;
+        c *= 1.0 - 0.28 * dot(d, d) * 1.6;
+        gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+      }`,
+  }));
 }
 function render(cam) {
   if (composer) { aoPass.camera = cam; composer.render(); } else renderer.render(scene, cam);
@@ -127,10 +149,10 @@ function setSun(az, el) {
   envScene.add(s2);
   if (scene.environment) scene.environment.dispose();
   scene.environment = pmrem.fromScene(envScene).texture;
-  scene.environmentIntensity = 0.14;
+  scene.environmentIntensity = 0.32;
   sunLight.color.setRGB(1, 0.92 - 0.3 * low, 0.85 - 0.5 * low);
   sunLight.intensity = 1.6 + 1.0 * Math.sin(Math.max(el, 3) * DEG);
-  hemi.intensity = 0.45 + 0.25 * (1 - low);
+  hemi.intensity = 0.34 + 0.2 * (1 - low);
   hemi.color.setRGB(0.78 + 0.1 * low, 0.85 - 0.05 * low, 0.95 - 0.2 * low);
   scene.fog.color.setRGB(0.70 + 0.15 * low, 0.74, 0.80 - 0.15 * low);
   renderer.toneMappingExposure = 0.58 + 0.08 * low;
@@ -352,7 +374,7 @@ async function startLevel(level, opts = {}) {
     if (wy !== null) {
       // Wassermaske (Bake): Wasser nur, wo Gelände auf Seehöhe liegt und das Luftbild Wasser zeigt
       const mask = await new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}world/${level.id}/water_mask.png`).catch(() => null);
-      const water = makeWater(level.water.radius, level.water.color, level.water.clear, mask, wp);
+      const water = makeWater(level.water.radius, level.water.color, level.water.clear, mask, wp, level.water);
       water.position.set(wp.x, wy + 0.35, wp.z);
       scene.add(water);
       game.water = water;
@@ -456,15 +478,31 @@ function placeSunShadow(focus) {
 }
 
 function makeWaterNormals(size = 256) {
+  // kachelbares, unregelmässiges Wellenfeld: viele Wellen mit ganzzahligen Wellenvektoren in zufälligen Richtungen
+  const waves = [];
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 48; i++) {
+    const k = 2 + Math.floor(rnd() ** 1.6 * 30), a = rnd() * Math.PI * 2;
+    const kx = Math.round(Math.cos(a) * k), ky = Math.round(Math.sin(a) * k);
+    if (!kx && !ky) continue;
+    waves.push([kx, ky, rnd() * Math.PI * 2, 1 / Math.hypot(kx, ky) ** 0.9]);
+  }
+  const hgt = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = x / size * Math.PI * 2, v = y / size * Math.PI * 2;
+    let h = 0;
+    for (const [kx, ky, p, amp] of waves) h += Math.sin(kx * u + ky * v + p) * amp;
+    hgt[y * size + x] = h;
+  }
   const c = document.createElement('canvas'); c.width = c.height = size;
   const g = c.getContext('2d');
   const img = g.createImageData(size, size);
+  const H = (x, y) => hgt[((y + size) % size) * size + ((x + size) % size)];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const u = x / size * Math.PI * 2, v = y / size * Math.PI * 2;
-    const dx = Math.cos(u * 3 + v * 2) * 0.45 + Math.cos(u * 7 - v * 5) * 0.3 + Math.cos(u * 13 + v * 11) * 0.15 + Math.cos(u * 23 - v * 19) * 0.1;
-    const dy = Math.cos(v * 4 - u) * 0.45 + Math.cos(v * 9 + u * 6) * 0.3 + Math.cos(v * 15 - u * 12) * 0.15 + Math.cos(v * 21 + u * 17) * 0.1;
-    const i = (y * size + x) * 4;
-    img.data[i] = 128 + dx * 60; img.data[i + 1] = 128 + dy * 60; img.data[i + 2] = 255; img.data[i + 3] = 255;
+    const dx = (H(x + 1, y) - H(x - 1, y)) * 1.6, dy = (H(x, y + 1) - H(x, y - 1)) * 1.6;
+    const l = Math.hypot(dx, dy, 1), i = (y * size + x) * 4;
+    img.data[i] = 128 - dx / l * 127; img.data[i + 1] = 128 - dy / l * 127; img.data[i + 2] = 128 + 127 / l; img.data[i + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(c);
@@ -472,21 +510,17 @@ function makeWaterNormals(size = 256) {
   return tex;
 }
 
-function makeWater(radius, color, clear = 0, mask = null, center = null) {
+function makeWater(radius, color, clear = 0, mask = null, center = null, opts = {}) {
   const nrm = makeWaterNormals();
   const geo = mask ? new THREE.PlaneGeometry(2 * radius, 2 * radius, 1, 1) : new THREE.CircleGeometry(radius, 128);
-  if (quality.water === 'reflect' && !clear) {
+  const mirror = quality.water === 'reflect';
+  if ((mirror || mask) && !clear) {
     const w = new Water(geo, {
-      textureWidth: 1024, textureHeight: 1024, waterNormals: nrm,
-      sunDirection: sunDir.clone(), sunColor: 0xfff2e0, waterColor: color, distortionScale: 1.6, fog: true,
+      textureWidth: mirror ? 1024 : 4, textureHeight: mirror ? 1024 : 4, waterNormals: nrm,
+      sunDirection: sunDir.clone(), sunColor: 0xfff2e0, waterColor: color, distortionScale: 0.45, fog: true,
     });
-    w.material.uniforms.size.value = 6.0;
-    if (mask && center) {
-      w.material.uniforms.maskMap = { value: mask };
-      w.material.uniforms.maskRect = { value: new THREE.Vector4(center.x - radius, center.z - radius, 1 / (2 * radius), 1 / (2 * radius)) };
-      w.material.fragmentShader = 'uniform sampler2D maskMap;\nuniform vec4 maskRect;\n' + w.material.fragmentShader.replace('void main() {',
-        'void main() {\n  float wm = texture2D(maskMap, vec2((worldPosition.x - maskRect.x) * maskRect.z, 1.0 - (worldPosition.z - maskRect.y) * maskRect.w)).g;\n  if (wm < 0.5) discard;');
-    }
+    w.material.uniforms.size.value = 1.0;
+    if (mask && center) upgradeWater(w, { mask, rect: new THREE.Vector4(center.x - radius, center.z - radius, 1 / (2 * radius), 1 / (2 * radius)), flow: opts.flow, shallow: opts.shallow, mirror });
     if (clear) { w.material.transparent = true; w.material.uniforms.alpha.value = 1 - clear * 0.6; w.material.depthWrite = false; w.renderOrder = 2; }
     w.rotation.x = -Math.PI / 2;
     w.name = 'Water';
@@ -496,7 +530,10 @@ function makeWater(radius, color, clear = 0, mask = null, center = null) {
   nrm.repeat.set(radius / (clear ? 3 : 6), radius / (clear ? 3 : 6));
   const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.06, metalness: 0.0, normalMap: nrm, normalScale: new THREE.Vector2(0.25, 0.25), transparent: true, opacity: clear ? 0.92 - clear * 0.6 : 0.92, envMapIntensity: clear ? 0.55 : 1.0, depthWrite: !clear });
   if (clear) mat.normalScale.set(0.12, 0.12);
-  if (mask) { mat.alphaMap = mask; mat.alphaTest = 0.5; }
+  if (mask) {
+    mat.alphaMap = mask; mat.alphaTest = 0.5;
+    mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <alphamap_fragment>', '#ifdef USE_ALPHAMAP\n diffuseColor.a *= texture2D(alphaMap, vAlphaMapUv).r;\n#endif'); };
+  }
   const m = new THREE.Mesh(geo, mat);
   m.rotation.x = -Math.PI / 2;
   m.receiveShadow = true;

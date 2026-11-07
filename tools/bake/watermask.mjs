@@ -1,9 +1,11 @@
-// Wassermaske pro Level: Wasser nur dort, wo das Gelände auf Wasserhöhe liegt UND das Luftbild Wasser zeigt.
+// Wassermaske pro Level: See-/Flussflächen der swisstopo-Basiskarte (Vektor), nur wo das Gelände auf Wasserhöhe liegt.
 // Ausgabe: public/world/<level>/water_mask.png (Norden oben, Quadrat um level.water.at mit Halbkante radius)
+//   R = Wasser (weiche Kante), G = Abstand zum Ufer (0..255 = 0..80 m) für Flachwasserfarbe
 import sharp from 'sharp';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { bakeConfig, ALL_IDS } from './config.mjs';
-import { toLV95 } from './lv95.mjs';
+import { toLV95, toWGS84 } from './lv95.mjs';
+import { features } from './vt.mjs';
 
 function dem(dir, meta, name) {
   const d = meta.dem[name];
@@ -57,27 +59,55 @@ async function build(id) {
   const { E, N } = toLV95(W.at[0], W.at[1]);
   const cx = E - cfg.E0, cy = N - cfg.N0, R = W.radius;
   const wl = height(cx, cy);
-  const size = R > 2500 ? 2048 : R > 800 ? 2048 : 1024;
+  const size = 2048;
+  const mpp = (2 * R) / size;
+  // Wasserflächen rastern
+  const z = R > 3000 ? 12 : R > 1200 ? 13 : 14;
+  const { list } = await features(E - R - 50, N - R - 50, E + R + 50, N + R + 50, z, ['water', 'waterway'], toWGS84);
+  const tx = (e, n) => [((e - (E - R)) / (2 * R)) * size, ((N + R - n) / (2 * R)) * size];
+  const path = (g, close) => g.map((r) => r.map(([e, n], i) => { const [x, y] = tx(e, n); return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }).join('') + (close ? 'Z' : '')).join('');
+  const body = list.map((f) => f.layer === 'water' && f.type === 3 ? `<path d="${path(f.geom, true)}" fill="#fff" fill-rule="evenodd"/>`
+    : f.layer === 'waterway' && f.type === 2 && f.props.class === 'river' && f.props.brunnel !== 'tunnel' ? `<path d="${path(f.geom, false)}" fill="none" stroke="#fff" stroke-width="${(12 / mpp).toFixed(2)}" stroke-linecap="round"/>` : '').join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="100%" height="100%" fill="#000"/>${body}</svg>`;
+  const vec = (await sharp(Buffer.from(svg), { unlimited: true }).flatten().extractChannel(0).raw().toBuffer());
   const out = Buffer.alloc(size * size);
   let wet = 0;
   for (let j = 0; j < size; j++) {
     for (let i = 0; i < size; i++) {
+      const k = j * size + i;
       const x = cx - R + ((i + 0.5) / size) * 2 * R, y = cy + R - ((j + 0.5) / size) * 2 * R;
       const h = height(x, y);
-      let m = h <= wl + 0.6 && h >= wl - 2.5;
-      if (m) {
-        const c = await orthoColor(dir, meta, x, y);
-        m = c ? isWaterColor(c) || h <= wl + 0.15 : true;
-      }
-      if (m) { out[j * size + i] = 255; wet++; }
+      // jenseits der Landesgrenze fehlen die Vektorflächen: dort ebenes Gelände auf Seehöhe als Wasser
+      if (vec[k] < 20 && Math.max(Math.abs(x), Math.abs(y)) > meta.core && Math.abs(h - wl) < 0.8) vec[k] = 255;
+      if (vec[k] < 20) continue;
+      // höheres Gelände verdeckt die Wasserfläche ohnehin; ausschliessen nur tiefer liegende Gewässer (z. B. Rotsee)
+      const inMid = Math.max(Math.abs(x), Math.abs(y)) < meta.mid;
+      if (!inMid || h >= wl - 3.0) { out[k] = vec[k]; wet++; }
     }
   }
-  // Schliessen kleiner Löcher (Boote, Spiegelungen) und Glätten der Ufer
-  let img = sharp(out, { raw: { width: size, height: size, channels: 1 } });
-  const closed = await sharp(await img.blur(2.5).threshold(70).extractChannel(0).raw().toBuffer(), { raw: { width: size, height: size, channels: 1 } })
-    .blur(2.5).threshold(185).blur(1.2).extractChannel(0).png().toBuffer();
+  // Abstand zum Ufer (Chamfer-Distanztransformation, in Metern)
+  const INF = 1e9, dist = new Float32Array(size * size);
+  for (let k = 0; k < size * size; k++) dist[k] = out[k] > 127 ? INF : 0;
+  const a1 = mpp, a2 = mpp * Math.SQRT2;
+  for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+    const k = j * size + i; if (!dist[k]) continue;
+    let d = dist[k];
+    if (i > 0) d = Math.min(d, dist[k - 1] + a1);
+    if (j > 0) { d = Math.min(d, dist[k - size] + a1); if (i > 0) d = Math.min(d, dist[k - size - 1] + a2); if (i < size - 1) d = Math.min(d, dist[k - size + 1] + a2); }
+    dist[k] = d;
+  }
+  for (let j = size - 1; j >= 0; j--) for (let i = size - 1; i >= 0; i--) {
+    const k = j * size + i; if (!dist[k]) continue;
+    let d = dist[k];
+    if (i < size - 1) d = Math.min(d, dist[k + 1] + a1);
+    if (j < size - 1) { d = Math.min(d, dist[k + size] + a1); if (i < size - 1) d = Math.min(d, dist[k + size + 1] + a2); if (i > 0) d = Math.min(d, dist[k + size - 1] + a2); }
+    dist[k] = d;
+  }
+  const rgb = Buffer.alloc(size * size * 3);
+  for (let k = 0; k < size * size; k++) { rgb[k * 3] = out[k]; rgb[k * 3 + 1] = Math.min(255, Math.round((dist[k] / 80) * 255)); }
+  const smooth = await sharp(rgb, { raw: { width: size, height: size, channels: 3 } }).blur(1.0).png().toBuffer();
   mkdirSync(`public/world/${id}`, { recursive: true });
-  await sharp(closed).toFile(`public/world/${id}/water_mask.png`);
+  await sharp(smooth).toFile(`public/world/${id}/water_mask.png`);
   console.log(`${id}: Wassermaske ${size}px, Wasserspiegel ${wl.toFixed(2)} m, ${(100 * wet / (size * size)).toFixed(1)} % Wasser`);
 }
 

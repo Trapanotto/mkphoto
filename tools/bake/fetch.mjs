@@ -232,9 +232,12 @@ async function bakeLevel(id) {
   for (const [i, j] of chunks) {
     const e0 = cfg.E0 - cfg.core + i * CHUNK, n1 = cfg.N0 + cfg.core - j * CHUNK;
     const p = `${dir}/ortho/core_${i}_${j}.jpg`;
-    if (existsSync(p)) continue;
-    const px = await orthoImage(e0, n1 - CHUNK, e0 + CHUNK, n1, 1024, 18);
-    await saveJpg(px, 1024, p);
+    // innerste Kacheln (±400 m um das Wahrzeichen) in doppelter Auflösung: z19 ≈ 0.2 m/px
+    const hd = Math.abs(e0 + CHUNK / 2 - cfg.E0) < 400 && Math.abs(n1 - CHUNK / 2 - cfg.N0) < 400;
+    const size = hd ? 2048 : 1024;
+    if (existsSync(p) && (await sharp(p).metadata()).width >= size) continue;
+    const px = await orthoImage(e0, n1 - CHUNK, e0 + CHUNK, n1, size, hd ? 19 : 18);
+    await saveJpg(px, size, p, hd ? 86 : undefined);
   }
   const midN = Math.round((2 * cfg.mid) / MID_CHUNK);
   console.log(`  Luftbild Mittelring: ${midN * midN} Kacheln`);

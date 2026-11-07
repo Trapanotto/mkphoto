@@ -16,6 +16,7 @@ const page = await browser.newPage({ viewport: { width: +w, height: +h }, hasTou
 const logs = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text().slice(0, 200)}`); });
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+if (process.env.MK_QUALITY) await page.addInitScript((q) => { const k = 'mkphoto.settings.v1'; let s = {}; try { s = JSON.parse(localStorage.getItem(k)) || {}; } catch {} s.quality = q; localStorage.setItem(k, JSON.stringify(s)); }, process.env.MK_QUALITY);
 await page.goto(url);
 await page.waitForFunction(() => window.__mk);
 

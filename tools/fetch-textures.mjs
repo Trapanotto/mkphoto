@@ -25,6 +25,14 @@ export const SETS = {
   cobble: 'cobblestone_floor_04',
   concrete_board: 'wood_textured_concrete',
   asphalt: 'asphalt_02',
+  grass: 'aerial_grass_rock',
+  ground: 'forrest_ground_01',
+  gravel: 'gravelly_sand',
+  snow: 'snow_02',
+  pavers: 'concrete_pavers',
+  leaves: 'forest_leaves_02',
+  path: 'gravel_floor',
+  dirt: 'dry_ground_01',
 };
 
 const res = process.argv[2] || '1k';

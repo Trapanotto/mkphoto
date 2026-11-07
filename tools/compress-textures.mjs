@@ -1,7 +1,8 @@
 // Komprimiert public/tex/*/{diff,nor,rough}.jpg: 1K (Desktop) + 512 (Handy, *_s.jpg)
 import sharp from 'sharp';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-for (const set of readdirSync('public/tex', { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) {
+const only = process.argv.slice(2);
+for (const set of readdirSync('public/tex', { withFileTypes: true }).filter((d) => d.isDirectory() && (!only.length || only.includes(d.name))).map((d) => d.name)) {
   for (const m of ['diff', 'nor', 'rough']) {
     const p = `public/tex/${set}/${m}.jpg`;
     let src;

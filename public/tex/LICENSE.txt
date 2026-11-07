@@ -21,3 +21,11 @@ iron: https://polyhaven.com/a/rusty_metal_02
 cobble: https://polyhaven.com/a/cobblestone_floor_04
 concrete_board: https://polyhaven.com/a/wood_textured_concrete
 asphalt: https://polyhaven.com/a/asphalt_02
+grass: https://polyhaven.com/a/aerial_grass_rock
+ground: https://polyhaven.com/a/forrest_ground_01
+gravel: https://polyhaven.com/a/gravelly_sand
+snow: https://polyhaven.com/a/snow_02
+pavers: https://polyhaven.com/a/concrete_pavers
+leaves: https://polyhaven.com/a/forest_leaves_02
+path: https://polyhaven.com/a/gravel_floor
+dirt: https://polyhaven.com/a/dry_ground_01

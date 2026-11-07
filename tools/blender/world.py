@@ -10,12 +10,13 @@ import os
 import sys
 import shutil
 import numpy as np
+from mathutils import Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 lvl = sys.argv[sys.argv.index('--') + 1]
 SRC = os.path.join(ROOT, '.cache', 'bake', lvl)
 OUT = os.path.join(ROOT, 'public', 'world', lvl)
-os.makedirs(os.path.join(OUT, 'tex'), exist_ok=True)
+os.makedirs(OUT, exist_ok=True)
 meta = json.load(open(os.path.join(SRC, 'meta.json')))
 R_EARTH = 6371000 * 1.15  # mit Refraktion
 
@@ -277,6 +278,42 @@ bmesh.ops.delete(bm, geom=small, context='FACES')
 bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
 print(f'Dachflächen: {len(bm.faces)} ({len(small)} Kleinteile entfernt)')
 edges = [e for e in bm.edges if e.is_boundary]
+# Dachränder merken (für Vordächer, Brüstungen, Kamine nach dem Wandaufbau)
+bm.normal_update()
+rims = []
+for e in edges:
+    f = e.link_faces[0]
+    a, b2 = e.verts[0].co.copy(), e.verts[1].co.copy()
+    if (b2 - a).length < 1.2:
+        continue
+    fc = f.calc_center_median()
+    t = Vector((b2.x - a.x, b2.y - a.y, 0.0))
+    if t.length < 1e-3:
+        continue
+    t.normalize()
+    d = Vector((-t.y, t.x, 0.0))
+    if d.dot(Vector((fc.x - a.x, fc.y - a.y, 0.0))) > 0:
+        d = -d
+    rims.append((a, b2, d, f.normal.copy(), int(e.verts[0][bid_l])))
+flat_a, all_a = {}, {}
+for f in bm.faces:
+    k = int(round(f.verts[0][bid_l]))
+    ar = f.calc_area()
+    all_a[k] = all_a.get(k, 0) + ar
+    if f.normal.z >= 0.93:
+        flat_a[k] = flat_a.get(k, 0) + ar
+flat_b = {k for k in all_a if flat_a.get(k, 0) > 0.7 * all_a[k]}
+roof_faces = {}
+for f in bm.faces:
+    if f.normal.z < 0.93:
+        k = int(round(f.verts[0][bid_l]))
+        ar = f.calc_area()
+        if ar > roof_faces.get(k, (0, None, None))[0]:
+            roof_faces[k] = (ar, f.calc_center_median().copy(), f.normal.copy())
+top_z = {}
+for v in bm.verts:
+    k = int(round(v[bid_l]))
+    top_z[k] = max(top_z.get(k, -1e9), v.co.z)
 ret = bmesh.ops.extrude_edge_only(bm, edges=edges)
 for g in ret['geom']:
     if isinstance(g, bmesh.types.BMVert):
@@ -298,6 +335,71 @@ rel_l = bm.verts.layers.float.new('_relh')
 for v in bm.verts:
     v[bid_l] = float(round(v[bid_l]))  # beim Verschmelzen interpolierte IDs wieder ganzzahlig
     v[rel_l] = v.co.z - (base.get(int(v[bid_l]), v.co.z) - 0.6)
+
+
+def quad(pts, bid):
+    vs = [bm.verts.new(p) for p in pts]
+    for v in vs:
+        v[bid_l] = float(bid)
+        v[rel_l] = -1.0   # Kennung für den Shader: Bauteil ohne Fenster (Stein/Blech)
+    try:
+        return bm.faces.new(vs)
+    except ValueError:
+        return None
+
+
+n_eave = n_par = n_chim = 0
+for (a, b2, d, rn, bid) in rims:
+    if rn.z < 0.93:
+        # Vordach: Dachfläche 0.6 m in ihrer Neigung verlängern, Stirnbrett darunter
+        o = 0.6
+        dz = -(rn.x * d.x + rn.y * d.y) * o / max(rn.z, 0.2)
+        a2, b3 = a + d * o + Vector((0, 0, dz)), b2 + d * o + Vector((0, 0, dz))
+        f1 = quad([a, b2, b3, a2], bid)
+        if f1 is not None and f1.normal.z < 0:
+            f1.normal_flip()
+        lo = Vector((0, 0, -0.2))
+        f2 = quad([a2, b3, b3 + lo, a2 + lo], bid)
+        if f2 is not None and f2.normal.dot(d) < 0:
+            f2.normal_flip()
+        n_eave += 1
+    elif bid in flat_b:
+        # Flachdach: Brüstung 0.5 m mit Abdeckung
+        up = Vector((0, 0, 0.5))
+        f1 = quad([a, b2, b2 + up, a + up], bid)
+        if f1 is not None and f1.normal.dot(d) < 0:
+            f1.normal_flip()
+        ins = -d * 0.25
+        f2 = quad([a + up, b2 + up, b2 + up + ins, a + up + ins], bid)
+        if f2 is not None and f2.normal.z < 0:
+            f2.normal_flip()
+        f3 = quad([a + up + ins, b2 + up + ins, b2 + ins, a + ins], bid)
+        if f3 is not None and f3.normal.dot(d) > 0:
+            f3.normal_flip()
+        n_par += 1
+# Kamine auf der grössten Dachfläche jedes Gebäudes mit Steildach
+rng = np.random.default_rng(5)
+for bid, (ar, c, rn) in roof_faces.items():
+    if ar < 25 or rng.random() < 0.25:
+        continue
+    for _ in range(1 if ar < 120 else 2):
+        off = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)) * min(3.0, math.sqrt(ar) * 0.25)
+        p = c + off
+        p.z = c.z - (rn.x * off.x + rn.y * off.y) / max(rn.z, 0.2)
+        h = min(max(top_z.get(bid, p.z) + 0.45 - p.z, 0.9), 2.4)
+        w = rng.uniform(0.22, 0.36)
+        bot, tp = p.z - 0.6, p.z + h
+        cs = [Vector((p.x + sx * w, p.y + sy * w, 0)) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        for i in range(4):
+            q0, q1 = cs[i], cs[(i + 1) % 4]
+            f = quad([Vector((q0.x, q0.y, bot)), Vector((q1.x, q1.y, bot)), Vector((q1.x, q1.y, tp)), Vector((q0.x, q0.y, tp))], bid)
+            if f is not None and f.normal.dot(Vector(((q0.x + q1.x) / 2 - p.x, (q0.y + q1.y) / 2 - p.y, 0))) < 0:
+                f.normal_flip()
+        f = quad([Vector((q.x, q.y, tp)) for q in cs], bid)
+        if f is not None and f.normal.z < 0:
+            f.normal_flip()
+        n_chim += 1
+print(f'Details: {n_eave} Vordächer, {n_par} Brüstungen, {n_chim} Kamine')
 bmesh.ops.triangulate(bm, faces=bm.faces)
 bm.to_mesh(me); bm.free()
 me.validate()
@@ -320,20 +422,7 @@ for crop, suffix in ((None, ''), (750, '_s')):
     export([o], os.path.join(OUT, f'buildings{suffix}.glb'))
     clear([o])
 
-# ---------- Texturen + Metadaten
-for f in os.listdir(os.path.join(SRC, 'ortho')):
-    shutil.copy(os.path.join(SRC, 'ortho', f), os.path.join(OUT, 'tex', f))
-# Handy-Varianten (halbe Auflösung)
-for f in os.listdir(os.path.join(OUT, 'tex')):
-    if f.endswith('.jpg') and not f.endswith('_s.jpg'):
-        img = bpy.data.images.load(os.path.join(OUT, 'tex', f))
-        w, h = img.size
-        img.scale(max(1, w // 2), max(1, h // 2))
-        img.filepath_raw = os.path.join(OUT, 'tex', f.replace('.jpg', '_s.jpg'))
-        img.file_format = 'JPEG'
-        bpy.context.scene.render.image_settings.quality = 80
-        img.save()
-        bpy.data.images.remove(img)
+# ---------- Metadaten (Luftbilder werden nicht mehr ausgeliefert: Oberflächen kommen aus tools/bake/surface.mjs)
 shutil.copy(os.path.join(SRC, 'trees.json'), os.path.join(OUT, 'trees.json'))
 json.dump({'id': lvl, 'E0': meta['E0'], 'N0': meta['N0'], 'H0': H0, 'core': core, 'mid': mid, 'far': far,
            'chunk': chunk, 'midChunk': mchunk}, open(os.path.join(OUT, 'world.json'), 'w'), indent=1)

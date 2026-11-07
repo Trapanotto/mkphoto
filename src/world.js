@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
-import { dracoLoader, patchBuildingShader, setOrthoAtlas, setHideBoxes } from './geo.js';
+import { dracoLoader, patchBuildingShader, patchTerrainShader, setTerrainSurface, setHideBoxes } from './geo.js';
 import { toLV95 } from './lv95.js';
 import { applyLibrary } from './materials.js';
 
@@ -52,23 +52,13 @@ export class StaticWorld {
     const total = 6;
     const step = () => { done++; this.progress = done / total; onProgress?.(this.progress); };
 
-    const texCache = new Map();
-    const ortho = (name) => {
-      if (!texCache.has(name)) {
-        const t = texLoader.load(`${dir}tex/${name}${s}.jpg`);
-        t.colorSpace = THREE.SRGBColorSpace;
-        t.anisotropy = this.quality.smallTex ? 2 : 8;
-        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-        texCache.set(name, t);
-      }
-      return texCache.get(name);
-    };
     const terrainPart = async (file) => {
       const g = await loader.loadAsync(`${dir}${file}${s}.glb`);
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
-        const name = (o.material?.name || '').replace(/^ortho:/, '');
-        o.material = new THREE.MeshStandardMaterial({ map: ortho(name), roughness: 1, metalness: 0 });
+        o.material = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
+        o.material.onBeforeCompile = patchTerrainShader;
+        o.material.customProgramCacheKey = () => 'mk-terrain';
         o.receiveShadow = true;
         o.userData.isTerrain = true;
         o.geometry.computeBoundsTree();
@@ -77,7 +67,7 @@ export class StaticWorld {
       step();
     };
 
-    const buildingsP = loader.loadAsync(`${dir}buildings${s}.glb`).then((g) => {
+    const loadB = (file) => loader.loadAsync(`${dir}${file}${s}.glb`).then((g) => {
       g.scene.traverse((o) => {
         if (!o.isMesh) return;
         const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
@@ -95,33 +85,41 @@ export class StaticWorld {
         o.geometry.computeBoundsTree();
       });
       this.buildings.group.add(g.scene);
-      step();
-    }).catch((e) => { console.warn('Gebäude', e.message); step(); });
+    }).catch((e) => console.warn('Gebäude', file, e.message));
+    // Kern: swissBUILDINGS3D; Mittelring: aus Grundrissen der Basiskarte (tools/bake/midbuildings.mjs)
+    const buildingsP = Promise.all([loadB('buildings'), this.quality.smallTex && !this.quality.shadows ? null : loadB('buildings_mid')]).then(step);
 
     await Promise.all([terrainPart('terrain_core'), terrainPart('terrain_mid'), terrainPart('terrain_far'), buildingsP,
-      this.loadTrees(dir).then(step), this.buildAtlas(dir).then(step)]);
+      this.loadTrees(dir).then(step), setTerrainSurface(dir, this.meta, !!this.quality.smallTex, !!this.level.water).then(() => this.buildAtlas(dir)).then(step)]);
     this.root.updateMatrixWorld(true);
   }
 
-  // Dach-Atlas aus den Kern-Luftbildern (für Gebäudedächer und Minikarte)
+  // Kartenbild für die Minikarte aus den Oberflächenkarten (kein Luftbild)
   async buildAtlas(dir) {
-    const { core, chunk } = this.meta;
-    const n = Math.round((2 * core) / chunk);
-    const px = this.quality.smallTex ? 256 : 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = n * px;
-    const g = canvas.getContext('2d');
-    const jobs = [];
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      jobs.push(new Promise((res) => {
-        const img = new Image();
-        img.onload = () => { g.drawImage(img, i * px, j * px, px, px); res(); };
-        img.onerror = res;
-        img.src = `${dir}tex/core_${i}_${j}_s.jpg`;
-      }));
+    const { core } = this.meta;
+    const ld = (f) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = `${dir}${f}_s.png`; });
+    const [r, n, e] = await Promise.all(['surf_core_roads', 'surf_core_nat', 'surf_core_ext'].map(ld));
+    if (!r || !n || !e) return;
+    const S = r.width;
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = S;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const px = (img) => { g.drawImage(img, 0, 0); return g.getImageData(0, 0, S, S).data; };
+    const R = px(r), N = px(n), E = px(e);
+    const out = g.createImageData(S, S), o = out.data;
+    const mix = (c, d, t) => [c[0] + (d[0] - c[0]) * t, c[1] + (d[1] - c[1]) * t, c[2] + (d[2] - c[2]) * t];
+    for (let i = 0; i < S * S * 4; i += 4) {
+      let c = [168, 190, 132];
+      c = mix(c, [205, 200, 186], E[i + 1] / 255 * 0.5);
+      c = mix(c, [96, 136, 86], N[i] / 255);
+      c = mix(c, [236, 240, 244], N[i + 2] / 255);
+      c = mix(c, [120, 170, 200], N[i + 1] / 255);
+      c = mix(c, [214, 200, 168], R[i + 2] / 255);
+      c = mix(c, [226, 222, 214], Math.max(R[i + 1], E[i]) / 255);
+      c = mix(c, [255, 255, 255], R[i] / 255);
+      c = mix(c, [178, 120, 98], E[i + 2] / 255);
+      o[i] = c[0]; o[i + 1] = c[1]; o[i + 2] = c[2]; o[i + 3] = 255;
     }
-    await Promise.all(jobs);
-    setOrthoAtlas(canvas, -core, core, -core, core);
+    g.putImageData(out, 0, 0);
     this.atlas = { canvas, west: -core, east: core, north: -core, south: core };
   }
 

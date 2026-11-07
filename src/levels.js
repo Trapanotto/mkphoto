@@ -17,7 +17,7 @@ export const LEVELS = [
     lat: 47.05165, lon: 8.30755, h: 485,
     sun: { az: 215, el: 34 },
     wind: [2.0, 0.5],
-    water: { at: [47.0525, 8.3105], radius: 1600, color: 0x0f7f7c, clear: 0.08 },
+    water: { at: [47.0525, 8.3105], radius: 1600, color: 0x062a28, shallow: 0x1d6b5c, flow: [-0.9, -0.35] },
     spawn: { lat: 47.05135, lon: 8.31130, agl: 35, heading: 280 },
     landmarks: [
       { id: 'kapellbruecke', name: 'Kapellbrücke & Wasserturm', model: 'models/kapellbruecke.glb', lat: 47.05165, lon: 8.30755, heading: 0, base: 'water' },
@@ -39,7 +39,7 @@ export const LEVELS = [
     name: { de: 'Kettenbrücke', fr: 'Pont suspendu', it: 'Ponte a catene', en: 'Chain Bridge' },
     place: 'Aarau',
     lat: 47.39534, lon: 8.04209, h: 400,
-    water: { at: [47.39534, 8.04209], radius: 420, color: 0x3d6b6a },
+    water: { at: [47.39534, 8.04209], radius: 420, color: 0x0a3430, shallow: 0x2a7a62, flow: [1.6, -0.25] },
     sun: { az: 160, el: 40 },
     wind: [1.5, -1.0],
     spawn: { lat: 47.39470, lon: 8.03990, agl: 25, heading: 70 },
@@ -110,7 +110,7 @@ export const LEVELS = [
     tod: 'evening',
     sun: { az: 250, el: 22 },
     wind: [3.0, -1.2],
-    water: { at: [46.4128, 6.9240], radius: 9000, color: 0x2c5a6e },
+    water: { at: [46.4128, 6.9240], radius: 9000, color: 0x07283a, shallow: 0x1f6f78, flow: [0.08, 0.04] },
     spawn: { lat: 46.41300, lon: 6.92350, agl: 25, heading: 60 },
     landmarks: [
       { id: 'chillon', name: 'Schloss Chillon', model: 'models/chillon.glb', lat: 46.41412, lon: 6.92742, heading: 0, base: 'water' },
