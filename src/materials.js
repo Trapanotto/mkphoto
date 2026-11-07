@@ -10,6 +10,7 @@ export const LIBRARY = {
   roof_clay: { tex: 'roof_clay', tint: 0xb07a68, rough: 1.0 },
   roof_dark: { tex: 'roof_clay', tint: 0x6e5a52, rough: 1.0 },
   roof_moss: { tex: 'roof_slate', tint: 0xc0a47e, rough: 1.0 },
+  roof_kapellbruecke: { tex: 'roof_red', tint: 0x9c8170, rough: 1.0 },
   roof_tower: { tex: 'roof_red', tint: 0xa8806a, rough: 1.0 },
   wood_interior: { tex: 'wood_deck', tint: 0xe2b88e, rough: 1.0, emissive: 0x1a0f08, emissiveI: 1 },
   wood_band: { tex: 'wood_weathered', tint: 0x8a6448, rough: 1.0 },

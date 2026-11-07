@@ -21,7 +21,7 @@ def build(L):
     m = dict(
         stone=L.mat('stone_wasserturm', (0.62, 0.60, 0.56), meters=4.0),
         stone_l=L.mat('sandstone_old', (0.65, 0.62, 0.55), meters=3.0),
-        roof=L.mat('roof_moss', (0.36, 0.30, 0.22), meters=2.0),
+        roof=L.mat('roof_kapellbruecke', (0.36, 0.30, 0.22), meters=2.0),
         roof_t=L.mat('roof_tower', (0.45, 0.28, 0.20), meters=2.0),
         roof_o=L.mat('roof_red', (0.65, 0.35, 0.22), meters=2.0),
         boards=L.mat('wood_interior', (0.50, 0.36, 0.24), meters=2.0),
@@ -49,6 +49,36 @@ def build(L):
     water_tower(L, m, tower)
     L.merge_children(bridge)
     L.merge_children(tower)
+
+
+def roof_uv(obj, along, across, meters=2.0):
+    """Ziegelreihen entlang des Firsts, unabhängig von der Weltdrehung."""
+    uv = obj.data.uv_layers.active.data
+    for face in obj.data.polygons:
+        # Nur die Dachoberseite; Holz an Traufen und Unterseite bleibt unverändert.
+        if face.material_index != 0 or face.normal.z < 0.1:
+            continue
+        for li in face.loop_indices:
+            p = obj.data.vertices[obj.data.loops[li].vertex_index].co
+            uv[li].uv = (p.dot(along) / meters, p.dot(across) / meters)
+
+
+def tower_roof_uv(obj, meters=2.0):
+    """Jede Dachfläche erhält waagrechte Ziegelreihen und senkrechte Fugen."""
+    uv = obj.data.uv_layers.active.data
+    for face in obj.data.polygons:
+        n = face.normal
+        horizontal = Vector((n.x, n.y, 0))
+        if horizontal.length < 0.01:
+            continue
+        horizontal.normalize()
+        tangent = Vector((-horizontal.y, horizontal.x, 0))
+        slope = tangent.cross(n).normalized()
+        if slope.z < 0:
+            slope.negate()
+        for li in face.loop_indices:
+            p = obj.data.vertices[obj.data.loops[li].vertex_index].co
+            uv[li].uv = (p.dot(tangent) / meters, p.dot(slope) / meters)
 
 
 def segment(L, m, parent, si, p0, p1, end_house=False):
@@ -105,7 +135,8 @@ def segment(L, m, parent, si, p0, p1, end_house=False):
         L.hip_roof(f'{n}_roof', (*mid, 0), Ls + 1.6, 2 * roof_hw, EAVE - 0.2, RIDGE + 0.6 - EAVE, m['roof_o'], parent,
                    rot=ang, ridge_frac=0.45, overhang=0.0)
     else:
-        L.gable_roof(f'{n}_roof', at(-ext), at(Ls + ext), 2 * roof_hw, EAVE, RIDGE, m['roof'], m['beam'], parent, overhang=0.15, thick=0.12)
+        roof = L.gable_roof(f'{n}_roof', at(-ext), at(Ls + ext), 2 * roof_hw, EAVE, RIDGE, m['roof'], m['beam'], parent, overhang=0.15, thick=0.12)
+        roof_uv(roof, d, q)
         L.box(f'{n}_ridge', (*mid, RIDGE + 0.04), (Ls + 2 * ext, 0.26, 0.12), m['roof_t'], parent, rot_z=ang)
     k = int(Ls / 0.85)
     for i in range(k + 1):
@@ -147,7 +178,8 @@ def link(L, m, parent):
     for side in (-1, 1):
         cc = mid + q * (side * 1.15)
         L.box(f'link_wall{side}', (cc.x, cc.y, (DECK + PLATE) / 2), (Lp, 0.12, PLATE - DECK), m['boards'], parent, rot_z=angc)
-    L.gable_roof('link_roof', (c0.x, c0.y), (c1.x, c1.y), 3.6, EAVE - 0.3, RIDGE - 0.6, m['roof'], m['beam'], parent, overhang=0.3, thick=0.12)
+    roof = L.gable_roof('link_roof', (c0.x, c0.y), (c1.x, c1.y), 3.6, EAVE - 0.3, RIDGE - 0.6, m['roof'], m['beam'], parent, overhang=0.3, thick=0.12)
+    roof_uv(roof, d, q)
 
 
 def water_tower(L, m, parent):
@@ -173,8 +205,10 @@ def water_tower(L, m, parent):
             L.box(f'wt_bwinf{k}_{off}', (base.x, base.y, shaft_top + 1.55), (0.05, 0.95, 1.05), m['boards'], parent, rot_z=a)
     # Dach: Glockenform (Aufschiebling) + steiler Helm
     z0 = shaft_top + 3.1
-    L.prism('wt_roof_flare', (*T, z0 - 0.4), R_TOWER * 1.42, 1.3, 8, m['roof_t'], parent, radius_top=R_TOWER * 1.16, rot=rot8)
-    L.prism('wt_roof', (*T, z0 + 0.9), R_TOWER * 1.16, 10.5, 8, m['roof_t'], parent, radius_top=0.35, rot=rot8)
+    flare = L.prism('wt_roof_flare', (*T, z0 - 0.4), R_TOWER * 1.42, 1.3, 8, m['roof_t'], parent, radius_top=R_TOWER * 1.16, rot=rot8)
+    roof = L.prism('wt_roof', (*T, z0 + 0.9), R_TOWER * 1.16, 10.5, 8, m['roof_t'], parent, radius_top=0.35, rot=rot8)
+    tower_roof_uv(flare)
+    tower_roof_uv(roof)
     for k in range(8):  # Gratziegel
         a = k * math.pi / 4 + rot8
         pb = (T[0] + math.cos(a) * R_TOWER * 1.42, T[1] + math.sin(a) * R_TOWER * 1.42, z0 - 0.4)
