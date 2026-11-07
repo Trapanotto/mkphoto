@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { upgradeWater } from './water.js';
+import { getHideBox } from './hide-box.js';
 import { Life, lifeTime } from './life.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -410,15 +411,8 @@ async function startLevel(level, opts = {}) {
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
     });
     for (const h of hides) {
-      h.geometry.computeBoundingBox();
-      const lb = h.geometry.boundingBox;
-      const c = lb.getCenter(new THREE.Vector3()).applyMatrix4(h.matrixWorld);
-      const e = h.matrixWorld.elements;
-      const sx = new THREE.Vector3(e[0], e[1], e[2]).length() * (lb.max.x - lb.min.x);
-      const sz = new THREE.Vector3(e[8], e[9], e[10]).length() * (lb.max.z - lb.min.z);
-      const ax = new THREE.Vector3(e[0], e[1], e[2]).normalize();
-      const top = new THREE.Box3().setFromObject(h).max.y;
-      hideBoxes.push({ x: c.x, z: c.z, hx: sx / 2, hz: sz / 2, angle: Math.atan2(ax.z, ax.x), maxY: top });
+      const box = getHideBox(h);
+      if (box) hideBoxes.push(box);
       h.removeFromParent();
     }
     game.models.add(root);
