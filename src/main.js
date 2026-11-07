@@ -350,7 +350,9 @@ async function startLevel(level, opts = {}) {
     const wp = frame.toLocal(level.water.at[0], level.water.at[1], level.h);
     const wy = world.groundHeight(wp.x, wp.z);
     if (wy !== null) {
-      const water = makeWater(level.water.radius, level.water.color, level.water.clear);
+      // Wassermaske (Bake): Wasser nur, wo Gelände auf Seehöhe liegt und das Luftbild Wasser zeigt
+      const mask = await new THREE.TextureLoader().loadAsync(`${import.meta.env.BASE_URL}world/${level.id}/water_mask.png`).catch(() => null);
+      const water = makeWater(level.water.radius, level.water.color, level.water.clear, mask, wp);
       water.position.set(wp.x, wy + 0.35, wp.z);
       scene.add(water);
       game.water = water;
@@ -470,14 +472,21 @@ function makeWaterNormals(size = 256) {
   return tex;
 }
 
-function makeWater(radius, color, clear = 0) {
+function makeWater(radius, color, clear = 0, mask = null, center = null) {
   const nrm = makeWaterNormals();
+  const geo = mask ? new THREE.PlaneGeometry(2 * radius, 2 * radius, 1, 1) : new THREE.CircleGeometry(radius, 128);
   if (quality.water === 'reflect' && !clear) {
-    const w = new Water(new THREE.CircleGeometry(radius, 128), {
+    const w = new Water(geo, {
       textureWidth: 1024, textureHeight: 1024, waterNormals: nrm,
       sunDirection: sunDir.clone(), sunColor: 0xfff2e0, waterColor: color, distortionScale: 1.6, fog: true,
     });
     w.material.uniforms.size.value = 6.0;
+    if (mask && center) {
+      w.material.uniforms.maskMap = { value: mask };
+      w.material.uniforms.maskRect = { value: new THREE.Vector4(center.x - radius, center.z - radius, 1 / (2 * radius), 1 / (2 * radius)) };
+      w.material.fragmentShader = 'uniform sampler2D maskMap;\nuniform vec4 maskRect;\n' + w.material.fragmentShader.replace('void main() {',
+        'void main() {\n  float wm = texture2D(maskMap, vec2((worldPosition.x - maskRect.x) * maskRect.z, 1.0 - (worldPosition.z - maskRect.y) * maskRect.w)).g;\n  if (wm < 0.5) discard;');
+    }
     if (clear) { w.material.transparent = true; w.material.uniforms.alpha.value = 1 - clear * 0.6; w.material.depthWrite = false; w.renderOrder = 2; }
     w.rotation.x = -Math.PI / 2;
     w.name = 'Water';
@@ -487,7 +496,8 @@ function makeWater(radius, color, clear = 0) {
   nrm.repeat.set(radius / (clear ? 3 : 6), radius / (clear ? 3 : 6));
   const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.06, metalness: 0.0, normalMap: nrm, normalScale: new THREE.Vector2(0.25, 0.25), transparent: true, opacity: clear ? 0.92 - clear * 0.6 : 0.92, envMapIntensity: clear ? 0.55 : 1.0, depthWrite: !clear });
   if (clear) mat.normalScale.set(0.12, 0.12);
-  const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 96), mat);
+  if (mask) { mat.alphaMap = mask; mat.alphaTest = 0.5; }
+  const m = new THREE.Mesh(geo, mat);
   m.rotation.x = -Math.PI / 2;
   m.receiveShadow = true;
   m.name = 'Water';
@@ -745,7 +755,8 @@ const env = {
     if (moved < 0.4 && groundCache.t % 4 !== 0 && groundCache.y !== null) return groundCache.y;
     const targets = [game.world.terrain.group, game.models];
     if (game.world.buildings) targets.push(game.world.buildings.group);
-    downRay.set(new THREE.Vector3(x, drone.pos.y + 2.5, z), new THREE.Vector3(0, -1, 0));
+    // knapp über der Drohne starten: unter Dächern (Kapellbrücke) zählt der Boden darunter
+    downRay.set(new THREE.Vector3(x, drone.pos.y + 0.4, z), new THREE.Vector3(0, -1, 0));
     downRay.far = 5000;
     let hit = firstRealHit(downRay.intersectObjects(targets, true));
     if (!hit) {

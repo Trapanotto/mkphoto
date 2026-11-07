@@ -103,7 +103,7 @@ export function patchBuildingShader(shader) {
   shader.uniforms.uSand = facadeTex.sand;
   shader.uniforms.uStyle = facadeTex.style;
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNrm;\nvarying float vBid;\n#ifdef HAS_BATCHID\nattribute float _batchid;\n#endif')
+    .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNrm;\nflat varying float vBid;\nvarying float vRel;\n#ifdef HAS_BATCHID\nattribute float _batchid;\n#endif\n#ifdef HAS_RELH\nattribute float _relh;\n#endif')
     .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
       vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
       vWNrm = normalize(mat3(modelMatrix) * objectNormal);
@@ -111,12 +111,18 @@ export function patchBuildingShader(shader) {
         vBid = _batchid;
       #else
         vBid = 0.0;
+      #endif
+      #ifdef HAS_RELH
+        vRel = _relh;
+      #else
+        vRel = vWPos.y + 60.0;
       #endif`);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>
       varying vec3 vWPos;
       varying vec3 vWNrm;
-      varying float vBid;
+      flat varying float vBid;
+      varying float vRel;
       uniform vec4 uHideA[${MAX_HIDE}];
       uniform vec4 uHideB[${MAX_HIDE}];
       uniform sampler2D uOrtho;
@@ -131,49 +137,63 @@ export function patchBuildingShader(shader) {
     .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>
       {
         vec3 n = normalize(vWNrm);
-        float isRoof = smoothstep(0.25, 0.5, n.y);
-        vec2 t2 = normalize(vec2(-n.z, n.x) + 1e-5);
+        float isRoof = smoothstep(0.25, 0.45, n.y);
+        // Wandrichtung auf 0.5° gerastert: sonst verstärken winzige Normalenschwankungen (× Weltkoordinate) das Fensterraster zu Pixelrauschen
+        float wa = floor(atan(n.x, -n.z) * 114.59156 + 0.5) / 114.59156;
+        vec2 t2 = vec2(cos(wa), sin(wa));
         float s = dot(vWPos.xz, t2);
-        // Farbe pro Gebäude (Batch-ID) + Kachelposition
         float h = hash2(vec2(vBid * 0.618 + floor(vWPos.x / 300.0), floor(vWPos.z / 300.0) + vBid * 0.31));
         float h2 = hash2(vec2(h * 91.3, vBid + 7.0));
-        vec3 pal0 = vec3(0.86, 0.83, 0.76);   // gebrochenes Weiss
-        vec3 pal1 = vec3(0.86, 0.76, 0.58);   // Ocker
-        vec3 pal2 = vec3(0.84, 0.68, 0.58);   // Lachs
-        vec3 pal3 = vec3(0.74, 0.77, 0.70);   // Graugrün
-        vec3 pal4 = vec3(0.80, 0.80, 0.78);   // Hellgrau
+        float rel = vRel;
+        // ---------- Fassade
+        vec3 pal0 = vec3(0.84, 0.81, 0.74), pal1 = vec3(0.84, 0.74, 0.56), pal2 = vec3(0.82, 0.66, 0.56);
+        vec3 pal3 = vec3(0.72, 0.75, 0.68), pal4 = vec3(0.78, 0.78, 0.76);
         vec3 wall = h < 0.38 ? pal0 : h < 0.55 ? pal1 : h < 0.68 ? pal2 : h < 0.8 ? pal3 : pal4;
-        vec2 wuv = vec2(s, vWPos.y) / 3.5;
-        vec3 plasterT = texture2D(uPlaster, wuv).rgb;
-        wall *= (0.42 + 0.62 * plasterT) * 0.9;
+        vec3 plasterT = texture2D(uPlaster, vec2(s, vWPos.y) / 3.5).rgb;
+        wall *= (0.5 + 0.55 * plasterT) * 0.88;
         if (uStyle > 0.5) {
           vec3 sandT = texture2D(uSand, vec2(s, vWPos.y) / 4.0).rgb;
           wall = mix(wall, sandT * vec3(0.78, 0.80, 0.72) * 1.15, 0.85);
         }
-        // Fenster: Raster 2.9 m x 3.1 m, Rahmen, Sims, Glas mit Himmelsspiegelung
-        float fy = fract(vWPos.y / 3.1);
-        float fx = fract((s + h2 * 1.3) / 2.9);
-        float inWin = step(0.30, fy) * step(fy, 0.74) * step(0.30, fx) * step(fx, 0.70);
-        float inFrame = step(0.27, fy) * step(fy, 0.77) * step(0.27, fx) * step(fx, 0.73) - inWin;
-        float sill = step(0.24, fy) * step(fy, 0.28) * step(0.25, fx) * step(fx, 0.75);
+        // Fensterraster relativ zum Sockel des Gebäudes, kantengeglättet (kein Flimmern)
+        float cx = (s + h2 * 1.3) / 2.9;
+        float cy = rel / 3.1;
+        float fx = fract(cx), fy = fract(cy);
+        vec2 fw = max(fwidth(vec2(cx, cy)), vec2(1e-4));
+        #define BOX(f, a, b, w) (smoothstep((a) - (w), (a) + (w), f) - smoothstep((b) - (w), (b) + (w), f))
+        float ground = 1.0 - step(3.4, rel);
+        float win = BOX(fx, 0.30, 0.70, fw.x) * BOX(fy, 0.30, 0.74, fw.y) * (1.0 - ground);
+        float frame = BOX(fx, 0.26, 0.74, fw.x) * BOX(fy, 0.26, 0.78, fw.y) * (1.0 - ground) - win;
+        float sill = BOX(fx, 0.24, 0.76, fw.x) * BOX(fy, 0.22, 0.27, fw.y) * (1.0 - ground);
+        // Erdgeschoss: grössere Schaufenster, Sockel
+        float shop = BOX(fract(cx * 0.5), 0.12, 0.88, fw.x * 0.5) * BOX(rel, 0.75, 2.9, fw.y * 3.1) * ground;
         vec3 vdir = normalize(vWPos - cameraPosition);
         float fres = pow(1.0 - abs(dot(vdir, n)), 2.0);
-        vec3 glass = mix(vec3(0.05, 0.06, 0.08), vec3(0.45, 0.55, 0.65), 0.25 + 0.6 * fres);
-        // manche Fenster mit Vorhang/Licht
-        float cur = step(0.82, hash2(floor(vec2(s / 2.9, vWPos.y / 3.1))));
-        glass = mix(glass, vec3(0.55, 0.50, 0.42), cur * 0.5);
-        float facadeOnly = 1.0 - isRoof;
-        wall = mix(wall, wall * 1.12 + 0.04, (inFrame + sill) * facadeOnly);
-        wall = mix(wall, glass, inWin * facadeOnly);
-        // Dach: Luftbildfarbe x Ziegelstruktur
-        vec3 roofFallback = mix(vec3(0.46, 0.24, 0.17), vec3(0.38, 0.33, 0.30), step(0.7, h));
+        vec3 glass = mix(vec3(0.05, 0.06, 0.08), vec3(0.42, 0.52, 0.62), 0.25 + 0.6 * fres);
+        float cur = step(0.8, hash2(floor(vec2(cx, cy)) + vBid));
+        glass = mix(glass, vec3(0.52, 0.47, 0.40), cur * 0.45);
+        // in der Ferne: gemittelter Eindruck statt Muster
+        float far = smoothstep(0.18, 0.45, max(fw.x, fw.y));
+        vec3 fac = wall;
+        fac = mix(fac, fac * 1.1 + 0.03, clamp(frame + sill, 0.0, 1.0));
+        fac = mix(fac, glass, clamp(win + shop, 0.0, 1.0));
+        fac = mix(fac, mix(wall, glass, 0.18), far);
+        // Sockel und Bodenschatten
+        fac = mix(vec3(0.42, 0.41, 0.39) * (0.7 + 0.5 * plasterT), fac, smoothstep(0.55, 0.75, rel));
+        fac *= mix(0.72, 1.0, smoothstep(0.0, 3.0, rel));
+        // ---------- Dach: Ziegelstruktur, Farbe aus dem (unscharfen) Luftbild
         vec2 ouv = (vWPos.xz - uOrthoRect.xy) * uOrthoRect.zw;
         float inO = uOrthoOn * step(0.0, ouv.x) * step(ouv.x, 1.0) * step(0.0, ouv.y) * step(ouv.y, 1.0);
-        vec3 roof = mix(roofFallback, texture2D(uOrtho, ouv).rgb * 0.95, inO);
-        vec2 ruv = vec2(dot(vWPos.xz, normalize(vec2(n.z, -n.x) + 1e-5)), dot(vWPos.xz, normalize(n.xz + 1e-5))) / 2.5;
-        float tileL = dot(texture2D(uRoofTex, ruv).rgb, vec3(0.333));
-        roof *= 0.7 + 0.75 * tileL;
-        diffuseColor.rgb = mix(wall, roof, isRoof);
+        vec3 roofFallback = mix(vec3(0.46, 0.25, 0.18), vec3(0.36, 0.33, 0.31), step(0.65, h));
+        vec3 oc = texture2D(uOrtho, ouv, 2.5).rgb;
+        vec3 roofTint = mix(roofFallback, oc, inO);
+        vec2 ruv = vec2(dot(vWPos.xz, normalize(vec2(n.z, -n.x) + 1e-5)), dot(vWPos.xz, normalize(n.xz + 1e-5)) * 1.15) / 2.2;
+        vec3 tile = texture2D(uRoofTex, ruv).rgb;
+        float tileL = dot(tile, vec3(0.333));
+        float flatR = smoothstep(0.9, 0.97, n.y);
+        vec3 roof = roofTint * (0.62 + 0.9 * tileL) * 1.05;
+        roof = mix(roof, texture2D(uOrtho, ouv, 0.5).rgb * inO + roofFallback * (1.0 - inO), flatR);
+        diffuseColor.rgb = mix(fac, roof, isRoof);
       }`);
 }
 

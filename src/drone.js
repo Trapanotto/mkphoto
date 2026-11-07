@@ -118,7 +118,7 @@ export class Drone {
     const ground = env.ground(next.x, next.z);
     if (ground !== null) {
       this.groundY = ground;
-      const minY = ground + 1.2;
+      const minY = ground + 0.7;
       if (next.y < minY) { next.y = minY; if (this.vel.y < 0) this.vel.y = 0; }
       const maxY = ground + this.maxAgl;
       if (next.y > maxY) { next.y = Math.max(this.pos.y - 0.5 * dt, maxY); if (this.vel.y > 0) this.vel.y *= 0.5; }

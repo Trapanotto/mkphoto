@@ -242,10 +242,40 @@ for f in bm.faces:
         if abs(lx) < h['hx'] and abs(ly) < h['hy']:
             kill.append(f); break
 bmesh.ops.delete(bm, geom=kill, context='FACES')
+# doppelte Dachflächen (gestapelte LOD-Teile in swissBUILDINGS3D) -> nur die höchste behalten, sonst flimmern doppelte Wände
+bm.faces.index_update()
+top = {}
+for f in bm.faces:
+    c = f.calc_center_median()
+    key = (round(c.x / 0.1), round(c.y / 0.1), round(f.normal.x * 20), round(f.normal.y * 20), round(f.calc_area() * 4))
+    o = top.get(key)
+    if o is None or c.z > o[1]:
+        top[key] = (f, c.z)
+keep = {v[0].index for v in top.values()}
+dup = [f for f in bm.faces if f.index not in keep]
+bmesh.ops.delete(bm, geom=dup, context='FACES')
+print(f'Doppelte Dachflächen entfernt: {len(dup)}')
 bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
 # kleine Dachteile (Kamine, Gauben-Reste) entfernen
 bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(5), verts=bm.verts, edges=bm.edges)
-print(f'Dachflächen: {len(bm.faces)}')
+# Dachinseln (Kamine, Gauben, Splitter) unter 12 m² entfernen – sonst entstehen Wandsplitter bis zum Boden
+seen = set(); small = []
+for f in bm.faces:
+    if f.index in seen:
+        continue
+    stack = [f]; isl = []; seen.add(f.index)
+    while stack:
+        x = stack.pop(); isl.append(x)
+        for e in x.edges:
+            for y in e.link_faces:
+                if y.index not in seen:
+                    seen.add(y.index); stack.append(y)
+    if sum(t.calc_area() for t in isl) < 12.0:
+        small.extend(isl)
+bm.faces.ensure_lookup_table()
+bmesh.ops.delete(bm, geom=small, context='FACES')
+bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+print(f'Dachflächen: {len(bm.faces)} ({len(small)} Kleinteile entfernt)')
 edges = [e for e in bm.edges if e.is_boundary]
 ret = bmesh.ops.extrude_edge_only(bm, edges=edges)
 for g in ret['geom']:
@@ -263,6 +293,11 @@ for g in ret['geom']:
         out = (fc.x - c[0] / c[2]) * g.normal.x + (fc.y - c[1] / c[2]) * g.normal.y
         if out < 0:
             g.normal_flip(); flipped += 1
+# Höhe über Gebäudesockel je Vertex (für Sockel, Erdgeschoss, Fenster im Shader)
+rel_l = bm.verts.layers.float.new('_relh')
+for v in bm.verts:
+    v[bid_l] = float(round(v[bid_l]))  # beim Verschmelzen interpolierte IDs wieder ganzzahlig
+    v[rel_l] = v.co.z - (base.get(int(v[bid_l]), v.co.z) - 0.6)
 bmesh.ops.triangulate(bm, faces=bm.faces)
 bm.to_mesh(me); bm.free()
 me.validate()

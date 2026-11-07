@@ -82,9 +82,12 @@ export class StaticWorld {
         if (!o.isMesh) return;
         const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
         const hasBid = !!o.geometry.attributes._batchid;
-        if (hasBid) m.defines = { HAS_BATCHID: '' };
+        const hasRel = !!o.geometry.attributes._relh;
+        m.defines = {};
+        if (hasBid) m.defines.HAS_BATCHID = '';
+        if (hasRel) m.defines.HAS_RELH = '';
         m.onBeforeCompile = patchBuildingShader;
-        m.customProgramCacheKey = () => 'mk-building-static' + (hasBid ? 'b' : '');
+        m.customProgramCacheKey = () => 'mk-building-static' + (hasBid ? 'b' : '') + (hasRel ? 'r' : '');
         o.material = m;
         o.castShadow = !!this.quality.buildingShadows;
         o.receiveShadow = true;

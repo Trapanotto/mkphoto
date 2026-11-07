@@ -29,6 +29,7 @@ def build(L):
         beam=L.mat('wood_dark', (0.30, 0.20, 0.12), meters=1.5),
         pile=L.mat('wood_rough', (0.20, 0.17, 0.14), meters=2.0),
         paint=L.mat('gable_painting', (0.55, 0.42, 0.28), meters=2.0),
+        flowers=L.mat('flower_cards', (0.5, 0.2, 0.1)),
         fl_r=L.mat('flowers_red', (0.8, 0.08, 0.06)),
         fl_p=L.mat('flowers_pink', (0.85, 0.3, 0.5)),
         fl_y=L.mat('flowers_yellow', (0.95, 0.75, 0.1)),
@@ -74,12 +75,9 @@ def segment(L, m, parent, si, p0, p1, end_house=False):
         # Blumenkisten aussen auf der Brüstung, Blumen hängen über
         cb = at(Ls / 2, side * (wall + 0.24))
         L.box(f'{n}_fbox{side}', (*cb, RAIL - 0.1), (Ls - 0.6, 0.36, 0.3), m['beam'], parent, rot_z=ang)
-        a_, b_ = at(0.4, side * (wall + 0.26)), at(Ls - 0.4, side * (wall + 0.26))
-        a2, b2 = at(0.4, side * (wall + 0.44)), at(Ls - 0.4, side * (wall + 0.44))
-        L.blobs(f'{n}_green{side}', a_, b_, RAIL - 0.06, int(Ls * 4.5), 0.12, m['leaves'], parent, jitter=0.25, seed=si * 7 + side)
-        L.blobs(f'{n}_hang{side}', a2, b2, RAIL - 0.3, int(Ls * 2.4), 0.11, m['leaves'], parent, jitter=0.2, seed=si * 9 + side)
-        for fi, (fm, dens) in enumerate(((m['fl_r'], 1.6), (m['fl_p'], 0.9), (m['fl_y'], 0.5))):
-            L.blobs(f'{n}_fl{side}_{fi}', a_, b_, RAIL + 0.04, int(Ls * dens * 2.2), 0.065, fm, parent, jitter=0.36, seed=si * 13 + side * 5 + fi)
+        # Geranien als Bildkarten (Textur aus baeume.py), aussen an der Kiste
+        pa, pb = (at(0.3, side * (wall + 0.1)), at(Ls - 0.3, side * (wall + 0.1))) if side < 0 else (at(Ls - 0.3, side * (wall + 0.1)), at(0.3, side * (wall + 0.1)))
+        L.flower_strip(f'{n}_flowers{side}', pa, pb, RAIL - 0.02, 0.2, m['flowers'], parent, seed=si * 11 + side)
         # Pfosten mit Kopfbändern (beidseitig, bilden Bögen), Pfette
         c = at(Ls / 2, side * (wall - 0.05))
         L.box(f'{n}_plate{side}', (*c, PLATE + 0.09), (Ls + 2 * ext, 0.2, 0.18), m['beam'], parent, rot_z=ang)

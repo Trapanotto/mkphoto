@@ -54,6 +54,9 @@ export const LIBRARY = {
   flag_white: { color: 0xffffff, rough: 0.7 },
   solar: { color: 0x101830, rough: 0.15, metal: 0.6 },
   plastic_grey: { color: 0x8c9094, rough: 0.45 },
+  leaf_cards: { img: 'foliage/leaves.png', tint: 0xffffff, rough: 0.9, alphaTest: 0.45 },
+  needle_cards: { img: 'foliage/needles.png', tint: 0xffffff, rough: 0.9, alphaTest: 0.45 },
+  flower_cards: { img: 'foliage/geraniums.png', tint: 0xffffff, rough: 0.85, alphaTest: 0.45 },
   plastic_dark: { color: 0x1c1d20, rough: 0.4 },
   led_red: { color: 0xff2010, rough: 0.5, emissive: 0xff2010 },
   led_green: { color: 0x20ff40, rough: 0.5, emissive: 0x20ff40 },
@@ -93,6 +96,15 @@ export function getMaterial(key) {
     envMapIntensity: d.env ?? 0.7,
   });
   if (d.emissive) { m.emissive.setHex(d.emissive); m.emissiveIntensity = d.emissiveI ?? 2; }
+  if (d.img) {
+    const t = loader.load(`${BASE}${d.img}`);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = anisotropy;
+    m.color.setHex(d.tint ?? 0xffffff);
+    m.map = t;
+    m.alphaTest = d.alphaTest ?? 0.5;
+    m.side = THREE.DoubleSide;
+  }
   if (d.tex) {
     m.map = tex(d.tex, 'diff', true);
     m.normalMap = tex(d.tex, 'nor', false);

@@ -172,3 +172,32 @@ def railing(name, p0, p1, z, h, spacing, mat_, parent, post=0.06):
     for i in range(k + 1):
         q = Vector((p0[0], p0[1], 0)) + d * (L * i / k)
         box(f'{name}_p{i}', (q.x, q.y, z + h / 2), (post, post, h), mat_, parent, rot_z=ang)
+
+
+def flower_strip(name, p0, p1, z, depth_out, mat_, parent, height=0.55, seed=1):
+    """Blumenkiste als Bildkarten: aufrechte Karte + nach aussen hängende Karte, zufällige Texturausschnitte."""
+    rnd = random.Random(seed)
+    L_, ang, d, n = wall_frame(p0, p1)
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    seg = 1.1
+    k = max(1, int(L_ / seg))
+    for i in range(k):
+        s0, s1 = i * L_ / k - 0.08, (i + 1) * L_ / k + 0.08
+        u0 = rnd.uniform(0, 0.5)
+        u1 = u0 + 0.5
+        a = Vector((p0[0], p0[1], 0)) + d * s0 + n * depth_out
+        b = Vector((p0[0], p0[1], 0)) + d * s1 + n * depth_out
+        # aufrecht (leicht nach aussen geneigt)
+        quad = [a + Vector((0, 0, z - 0.05)), b + Vector((0, 0, z - 0.05)),
+                b + n * 0.12 + Vector((0, 0, z + height)), a + n * 0.12 + Vector((0, 0, z + height))]
+        f = bm.faces.new([bm.verts.new(q) for q in quad])
+        for loop, uv in zip(f.loops, ((u0, 0.0), (u1, 0.0), (u1, 1.0), (u0, 1.0))):
+            loop[uvl].uv = uv
+        # hängend
+        quad = [a + n * 0.18 + Vector((0, 0, z - 0.55)), b + n * 0.18 + Vector((0, 0, z - 0.55)),
+                b + Vector((0, 0, z + 0.05)), a + Vector((0, 0, z + 0.05))]
+        f = bm.faces.new([bm.verts.new(q) for q in quad])
+        for loop, uv in zip(f.loops, ((u0, 0.62), (u1, 0.62), (u1, 0.0), (u0, 0.0))):
+            loop[uvl].uv = uv
+    return lib._finish(name, bm, [mat_], parent, uv=False)

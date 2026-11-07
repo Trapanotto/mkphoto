@@ -20,5 +20,6 @@ for (const id of ids) {
     run('node', ['tools/bake/fetch3d.mjs', id]);
   }
   run('node', ['tools/bake/hides.mjs', id]);
+  run('node', ['tools/bake/watermask.mjs', id]);
   run(BLENDER, ['-b', '--factory-startup', '-P', 'tools/blender/world.py', '--', id], args.includes('--skip-terrain') ? { MK_SKIP_TERRAIN: '1' } : {});
 }
