@@ -8,12 +8,16 @@ export const LIBRARY = {
   roof_red: { tex: 'roof_red', tint: 0xd8a088, rough: 1.0 },
   roof_clay: { tex: 'roof_clay', tint: 0xb07a68, rough: 1.0 },
   roof_dark: { tex: 'roof_clay', tint: 0x6e5a52, rough: 1.0 },
-  roof_moss: { tex: 'roof_clay', tint: 0x80705a, rough: 1.0 },
+  roof_moss: { tex: 'roof_slate', tint: 0xc0a47e, rough: 1.0 },
+  roof_tower: { tex: 'roof_red', tint: 0xa8806a, rough: 1.0 },
+  wood_interior: { tex: 'wood_deck', tint: 0xe2b88e, rough: 1.0, emissive: 0x1a0f08, emissiveI: 1 },
+  wood_band: { tex: 'wood_weathered', tint: 0x8a6448, rough: 1.0 },
+  gable_painting: { tex: 'plaster_old', tint: 0xb08a5a, rough: 0.9 },
   metal_dark: { tex: 'iron', tint: 0x303236, rough: 0.55, metal: 0.4 },
   roof_slate: { tex: 'roof_slate', tint: 0xb0b4b8, rough: 0.9 },
   wood_weathered: { tex: 'wood_weathered', tint: 0xc09070, rough: 1.0 },
-  wood_deck: { tex: 'wood_deck', tint: 0x9a8270, rough: 1.0 },
-  wood_dark: { tex: 'wood_dark', tint: 0x705040, rough: 1.0 },
+  wood_deck: { tex: 'wood_deck', tint: 0xc8a27c, rough: 1.0 },
+  wood_dark: { tex: 'wood_rough', tint: 0xc0946a, rough: 1.0 },
   wood_rough: { tex: 'wood_rough', tint: 0x807060, rough: 1.0 },
   stone_wasserturm: { tex: 'stone_tower', tint: 0xf2eee6, rough: 1.0 },
   sandstone_bern: { tex: 'sandstone', tint: 0xbcc4b8, rough: 1.0 },
@@ -43,7 +47,7 @@ export const LIBRARY = {
   flowers_red: { color: 0xc01010, rough: 0.8, vary: true },
   flowers_pink: { color: 0xd04880, rough: 0.8 },
   flowers_yellow: { color: 0xf0c020, rough: 0.8 },
-  leaves: { color: 0x3a6a26, rough: 0.9 },
+  leaves: { color: 0x34552a, rough: 0.9 },
   needles: { color: 0x1f3d22, rough: 0.9 },
   bark: { color: 0x4a3a2c, rough: 1.0 },
   flag_red: { color: 0xd01010, rough: 0.7 },
@@ -88,7 +92,7 @@ export function getMaterial(key) {
     metalness: d.metal ?? 0,
     envMapIntensity: d.env ?? 0.7,
   });
-  if (d.emissive) { m.emissive.setHex(d.emissive); m.emissiveIntensity = 2; }
+  if (d.emissive) { m.emissive.setHex(d.emissive); m.emissiveIntensity = d.emissiveI ?? 2; }
   if (d.tex) {
     m.map = tex(d.tex, 'diff', true);
     m.normalMap = tex(d.tex, 'nor', false);

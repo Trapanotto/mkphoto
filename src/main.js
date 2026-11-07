@@ -350,7 +350,7 @@ async function startLevel(level, opts = {}) {
     const wp = frame.toLocal(level.water.at[0], level.water.at[1], level.h);
     const wy = world.groundHeight(wp.x, wp.z);
     if (wy !== null) {
-      const water = makeWater(level.water.radius, level.water.color);
+      const water = makeWater(level.water.radius, level.water.color, level.water.clear);
       water.position.set(wp.x, wy + 0.35, wp.z);
       scene.add(water);
       game.water = water;
@@ -470,21 +470,23 @@ function makeWaterNormals(size = 256) {
   return tex;
 }
 
-function makeWater(radius, color) {
+function makeWater(radius, color, clear = 0) {
   const nrm = makeWaterNormals();
-  if (quality.water === 'reflect') {
+  if (quality.water === 'reflect' && !clear) {
     const w = new Water(new THREE.CircleGeometry(radius, 128), {
       textureWidth: 1024, textureHeight: 1024, waterNormals: nrm,
       sunDirection: sunDir.clone(), sunColor: 0xfff2e0, waterColor: color, distortionScale: 1.6, fog: true,
     });
     w.material.uniforms.size.value = 6.0;
+    if (clear) { w.material.transparent = true; w.material.uniforms.alpha.value = 1 - clear * 0.6; w.material.depthWrite = false; w.renderOrder = 2; }
     w.rotation.x = -Math.PI / 2;
     w.name = 'Water';
     w.userData.reflective = true;
     return w;
   }
-  nrm.repeat.set(radius / 6, radius / 6);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.06, metalness: 0.0, normalMap: nrm, normalScale: new THREE.Vector2(0.25, 0.25), transparent: true, opacity: 0.92, envMapIntensity: 1.0 });
+  nrm.repeat.set(radius / (clear ? 3 : 6), radius / (clear ? 3 : 6));
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.06, metalness: 0.0, normalMap: nrm, normalScale: new THREE.Vector2(0.25, 0.25), transparent: true, opacity: clear ? 0.92 - clear * 0.6 : 0.92, envMapIntensity: clear ? 0.55 : 1.0, depthWrite: !clear });
+  if (clear) mat.normalScale.set(0.12, 0.12);
   const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 96), mat);
   m.rotation.x = -Math.PI / 2;
   m.receiveShadow = true;

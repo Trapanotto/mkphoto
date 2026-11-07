@@ -17,10 +17,11 @@ export const LEVELS = [
     lat: 47.05165, lon: 8.30755, h: 485,
     sun: { az: 215, el: 34 },
     wind: [2.0, 0.5],
-    water: { at: [47.0525, 8.3105], radius: 1600, color: 0x2f5d62 },
+    water: { at: [47.0525, 8.3105], radius: 1600, color: 0x0f7f7c, clear: 0.62 },
     spawn: { lat: 47.05135, lon: 8.31130, agl: 35, heading: 280 },
     landmarks: [
-      { id: 'kapellbruecke', name: 'Kapellbrücke & Wasserturm', model: 'models/kapellbruecke.glb', lat: 47.05165, lon: 8.30755, heading: 0 },
+      { id: 'kapellbruecke', name: 'Kapellbrücke & Wasserturm', model: 'models/kapellbruecke.glb', lat: 47.05165, lon: 8.30755, heading: 0, base: 'water' },
+      { id: 'stege', name: 'Seebrücke & Rathaussteg', model: 'models/luzern_stege.glb', lat: 47.05165, lon: 8.30755, heading: 0, base: 'water' },
     ],
     subjects: [
       { id: 'bruecke', landmark: 'kapellbruecke', node: 'Bruecke' },
