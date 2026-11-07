@@ -39,3 +39,13 @@ test('Rathaus roof mask covers the old roof without swallowing a neighbouring ho
   assert.ok(inside(b.x, b.z), 'replacement footprint should be covered');
   assert.ok(!inside(b.x + 35, b.z), 'nearby buildings must remain outside');
 });
+
+test('the Pfistern model includes its replacement geometry and hide footprint', async () => {
+  const doc = await new NodeIO().registerExtensions([KHRDracoMeshCompression]).registerDependencies({
+    'draco3d.decoder': await draco3d.createDecoderModule(),
+  }).read('public/models/rathausturm.glb');
+  const nodes = doc.getRoot().listNodes();
+  assert.ok(nodes.some((node) => node.getName() === 'Pfistern_mesh' && node.getMesh()));
+  const hide = nodes.find((node) => node.getName() === 'Hide_pfistern');
+  assert.ok(hide?.getMesh(), 'old Pfistern geometry must be masked');
+});

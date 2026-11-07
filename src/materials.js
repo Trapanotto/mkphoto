@@ -16,6 +16,12 @@ export const LIBRARY = {
   rathaus_stone: { tex: 'sandstone', tint: 0xc8c3b6, rough: 1.0 },
   rathaus_roof_tile: { tex: 'roof_red', tint: 0x91786e, rough: 1.0 },
   rathaus_glass: { color: 0x536573, rough: 0.3, metal: 0.25, env: 0.8 },
+  // A white painted facade with the plaster's physical relief, without
+  // multiplying in the source scan's brownish albedo.
+  pfistern_plaster: { tex: 'plaster', tint: 0xd6d6d1, rough: 1.0, normalOnly: true },
+  pfistern_frame: { color: 0x626968, rough: 0.85 },
+  pfistern_glass: { color: 0x26343c, rough: 0.3, metal: 0.25, env: 0.8 },
+  pfistern_awning: { color: 0xd8c586, rough: 0.9 },
   wood_interior: { tex: 'wood_deck', tint: 0xe2b88e, rough: 1.0, emissive: 0x1a0f08, emissiveI: 1 },
   wood_band: { tex: 'wood_weathered', tint: 0x8a6448, rough: 1.0 },
   gable_painting: { tex: 'plaster_old', tint: 0xb08a5a, rough: 0.9 },
@@ -117,7 +123,7 @@ export function getMaterial(key) {
     m.side = THREE.DoubleSide;
   }
   if (d.tex) {
-    m.map = tex(d.tex, 'diff', true);
+    if (!d.normalOnly) m.map = tex(d.tex, 'diff', true);
     m.normalMap = tex(d.tex, 'nor', false);
     m.normalScale.set(1, 1);
     m.roughnessMap = tex(d.tex, 'rough', false);

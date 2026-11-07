@@ -15,7 +15,7 @@ Dann die angezeigte Adresse öffnen (Desktop oder Handy im selben WLAN).
 
 | Ort | Modell | Aufträge |
 |---|---|---|
-| Luzern | Kapellbrücke + Wasserturm, Rathausturm | Postkarte, Wasserturm-Porträt, Zickzack von oben |
+| Luzern | Kapellbrücke + Wasserturm, Rathaus und Zunfthaus zu Pfistern | Postkarte, Wasserturm-Porträt, Zickzack von oben |
 | Aarau | Kettenbrücke (1851) | Seitenansicht, Durchs Tor, Aare-Panorama |
 | Bern | Münster + Bundeshaus | Münsterturm, Bundeshaus von der Aare (Flugverbotszone!), Altstadt-Achse |
 | Lenzburg | Schloss Lenzburg | Burg auf dem Hügel, Innenhof, Bergfried |
@@ -55,9 +55,9 @@ node tools/build-models.mjs muenster
 
 Koordinaten im Modell: x = Ost, y = Nord, z = oben, Ursprung = Ankerpunkt aus `src/levels.js`.
 
-Der Rathausturm ist ein erster vereinfachter Entwurf nach dem Grundriss von
-[OpenStreetMap](https://www.openstreetmap.org/way/84983349) und einer
-Fotoreferenz. Quellen und Prüfansichten stehen in
+Rathaus, Rathausturm und Zunfthaus zu Pfistern sind erste vereinfachte Entwürfe nach Grundrissen von
+[OpenStreetMap](https://www.openstreetmap.org/way/84983349) und
+Fotoreferenzen. Quellen und Prüfansichten stehen in
 [`docs/luzern-referenzszene.md`](docs/luzern-referenzszene.md). Geodaten:
 © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright), ODbL.
 

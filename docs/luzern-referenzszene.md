@@ -44,6 +44,9 @@ tatsächlichen Desktop und einem Handy ist weiterhin nötig.
 - Die [Zunft zu Pfistern](https://zunft-zu-pfistern.ch/Geschichte-Zunfthaus-Pfistern-Luzern/Fassaden/)
   beschreibt die Bemalung der Reussfassade. Ihre Bilder sind nicht pauschal
   zur Übernahme freigegeben und werden nur als Referenz herangezogen.
+- [WES1947, Zunftaus zur Pfistern, 2011](https://commons.wikimedia.org/wiki/File:Zunftaus_zur_Pfistern,_Luzern_IMG_4917.jpg),
+  CC BY-SA 3.0. Vorlage für die Fassadenstudie unter `assets/luzern/` und für
+  Proportionen des ersten Modellentwurfs. Das Foto wird nicht als Spieltextur verwendet.
 
 ## Arbeitsstand
 
@@ -58,4 +61,7 @@ tatsächlichen Desktop und einem Handy ist weiterhin nötig.
   `tools/blender/models/rathausturm.py` vorhanden. Position und Grundrisse
   orientieren sich an OSM; Dachform, Arkaden und Zifferblatt an den oben
   genannten Referenzen. Masse und Details sind eine Annäherung, keine exakte
-  Bauaufnahme. Die benachbarte Häuserzeile benötigt individuelle Bearbeitung.
+  Bauaufnahme. Ein vereinfachtes Modell des benachbarten Zunfthauses ist
+  ebenfalls angelegt. Seine historischen Fassadenmalereien und Wappen fehlen
+  noch; die generierte Bildstudie ist nicht hinreichend genau für das Spiel.
+  Die weitere Häuserzeile benötigt individuelle Bearbeitung.

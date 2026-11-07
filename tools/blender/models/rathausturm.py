@@ -3,7 +3,9 @@
 # Origin: LV95 2'665'914.3 / 1'211'590.3; z = local ground level.
 import math
 import bmesh
+import bpy
 from mathutils import Vector
+from mathutils import Matrix
 
 ANGLE = math.radians(16.6)
 
@@ -52,6 +54,10 @@ def build(L):
     flag_red = L.mat('flag_red', (0.8, 0.03, 0.03))
     flag_white = L.mat('flag_white', (0.95, 0.95, 0.92))
     flag_blue = L.mat('flag_luzern_blue', (0.05, 0.2, 0.55))
+    pf_wall = L.mat('pfistern_plaster', (0.84, 0.84, 0.80), meters=3.5)
+    pf_frame = L.mat('pfistern_frame', (0.36, 0.39, 0.40))
+    pf_glass = L.mat('pfistern_glass', (0.12, 0.16, 0.19), rough=0.25)
+    awning = L.mat('pfistern_awning', (0.88, 0.79, 0.53))
     root = L.empty('Rathausturm')
     L.box('tower_shaft', (0, 0, 15.5), (8.1, 8.4, 31.0), stone, root, rot_z=ANGLE)
     L.box('tower_cornice', (0, 0, 30.9), (8.8, 9.1, 0.4), edge, root, rot_z=ANGLE)
@@ -94,6 +100,7 @@ def build(L):
                        clock + normal * 0.07 + direction * length, 0.09, gold, root)
     L.merge_children(root)
     rathaus(L, wall, frame, glass, dark, tiles, paving, flag_red, flag_white, flag_blue)
+    pfistern(L, pf_wall, frame, pf_frame, pf_glass, dark, tiles, paving, flag_white, awning)
     # The replacement should only mask the tower's footprint, not the Rathaus.
     # Allow for small footprint differences between OSM and the pre-baked
     # swissBUILDINGS3D surface; otherwise the old wall shows through.
@@ -186,3 +193,79 @@ def rathaus(L, wall, frame, glass, dark, tiles, paving, flag_red, flag_white, fl
     # Mask the full pre-baked roof as well as its walls: the source roof can
     # be much taller than the lower, reference-based replacement roof.
     L.hide_box('Hide_rathaus', (center.x, center.y, 30), (length + 1.2, depth + 1.2, 62), rot_z=ANGLE)
+
+
+def pfistern(L, wall, frame, window_frame, glass, dark, tiles, paving, white, awning):
+    """First geometry pass of the adjacent Zunfthaus, from its OSM footprint.
+
+    Painted coats of arms are not represented yet; the separate image study
+    is an illustrative reference and deliberately not used as a texture.
+    """
+    ang = math.radians(20.0)
+    along = Vector((math.cos(ang), math.sin(ang), 0))
+    normal = Vector((math.sin(ang), -math.cos(ang), 0))
+    front = Vector((-25.0, -33.15, 0))
+    length, depth = 12.5, 15.4
+    center = front - normal * (depth / 2)
+    root = L.empty('Pfistern')
+    L.box('pfistern_upper', (center.x, center.y, 10.4), (length, depth, 14.0), wall, root, rot_z=ang)
+    L.box('pfistern_floor', (center.x, center.y, 0.03), (length, depth, 0.16), paving, root, rot_z=ang)
+    inner = front - normal * 2.8
+    L.box('pfistern_arcade_back', (inner.x, inner.y, 1.75), (length, 0.2, 3.5), dark, root, rot_z=ang)
+    for side in (-1, 1):
+        p = center + along * side * (length / 2 - 0.15)
+        L.box(f'pfistern_side{side}', (p.x, p.y, 1.75), (0.3, depth, 3.5), wall, root, rot_z=ang)
+    bays = 3
+    step = length / bays
+    for i in range(bays + 1):
+        p = front + along * (-length / 2 + i * step)
+        L.box(f'pfistern_pier{i}', (p.x, p.y, 1.25), (0.44, 0.6, 2.5), frame, root, rot_z=ang)
+    for i in range(bays):
+        mid = front + along * (-length / 2 + (i + 0.5) * step)
+        r = (step - 0.44) / 2
+        points = [mid + along * (r * math.cos(math.pi * j / 8)) + Vector((0, 0, 2.5 + 0.8 * math.sin(math.pi * j / 8))) for j in range(9)]
+        for j in range(8):
+            L.beam_between(f'pfistern_arch{i}_{j}', points[j], points[j + 1], 0.2, frame, root)
+    # Balcony and striped restaurant canopy.
+    balcony = front + normal * 0.65
+    L.box('pfistern_balcony', (balcony.x, balcony.y, 3.55), (length, 1.5, 0.22), frame, root, rot_z=ang)
+    a = balcony - along * (length / 2 - 0.2) + normal * 0.7
+    b = balcony + along * (length / 2 - 0.2) + normal * 0.7
+    L.railing('pfistern_railing', (a.x, a.y), (b.x, b.y), 3.65, 1.0, 0.22, dark, root, post=0.04)
+    for i in range(24):
+        p = front + along * (-length / 2 + (i + 0.5) * length / 24) + normal * 0.6
+        L.box(f'pfistern_awning{i}', (p.x, p.y, 6.4), (length / 24 + 0.01, 1.5, 0.08),
+              white if i % 2 == 0 else awning, root, rot_z=ang)
+    p0 = front - along * (length / 2) + normal * 0.16
+    p1 = front + along * (length / 2) + normal * 0.16
+    for i, z in enumerate((7.2, 10.2, 13.3)):
+        L.facade(f'pfistern_windows{i}', (p0.x, p0.y), (p1.x, p1.y), glass, window_frame, root,
+                 floors=1, spacing=4.0, win_w=1.8, win_h=1.8, z_start=z,
+                 margin=1.6, sill=(frame, 0.2))
+    L.gable_wall('pfistern_gable', (front.x, front.y), length, 17.4, 17.4, 21.0, 0.22,
+                 ang + math.pi / 2, wall, root)
+    L.facade('pfistern_gable_windows', (p0.x, p0.y), (p1.x, p1.y), glass, window_frame, root,
+             floors=1, spacing=3.2, win_w=1.4, win_h=1.5, z_start=17.6, margin=3.0)
+    pback = front - normal * depth
+    L.gable_roof('pfistern_roof', (front.x, front.y), (pback.x, pback.y), length + 0.9,
+                 17.4, 21.0, tiles, frame, root, overhang=0.4, thick=0.15)
+    # Convert lettering to mesh before export so browsers do not need fonts.
+    curve = bpy.data.curves.new('Pfistern_label', 'FONT')
+    curve.body = 'Zunfthaus zu Pfistern'
+    curve.align_x = 'CENTER'
+    curve.size = 0.7
+    obj = bpy.data.objects.new('Pfistern_label', curve)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.parent = root
+    n = normal
+    orientation = Matrix(((along.x, 0, n.x), (along.y, 0, n.y), (0, 1, 0))).to_4x4()
+    p = front + normal * 0.27 + Vector((0, 0, 12.25))
+    obj.matrix_world = Matrix.Translation(p) @ orientation
+    obj.data.materials.append(dark)
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.convert(target='MESH')
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    L.merge_children(root)
+    L.hide_box('Hide_pfistern', (center.x, center.y, 20), (length + 0.6, depth + 0.6, 42), rot_z=ang)
