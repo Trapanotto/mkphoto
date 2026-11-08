@@ -63,11 +63,47 @@ function toGrid(buffer: ArrayBuffer, info: { size: number; step: number; count: 
   return { ...info, heights };
 }
 
+/**
+ * Low spots inside the city (courtyards, underpasses) sit at lake level in the data.
+ * Only cells connected to the lake and the river stay water; the rest is lifted just above it.
+ */
+function fillInlandPits(g: Grid) {
+  const n = g.count;
+  const water = new Uint8Array(n * n);
+  // the bridge middle is always in the river
+  const seed = Math.floor(n / 2) * n + Math.floor(n / 2);
+  const stack = [seed];
+  while (stack.length) {
+    const k = stack.pop()!;
+    if (water[k] || g.heights[k] > WATER_EPS) continue;
+    water[k] = 1;
+    const i = k % n;
+    const j = (k - i) / n;
+    if (i > 0) stack.push(k - 1);
+    if (i < n - 1) stack.push(k + 1);
+    if (j > 0) stack.push(k - n);
+    if (j < n - 1) stack.push(k + n);
+  }
+  for (let k = 0; k < water.length; k++) if (!water[k] && g.heights[k] <= WATER_EPS) g.heights[k] = WATER_EPS + 0.2;
+}
+
+export interface RoadData {
+  kind: 'car' | 'walk';
+  type: number;
+  name: string | null;
+  pts: [number, number][];
+}
+
+/** Tree position and height: [x, z, height]. */
+export type TreeData = [number, number, number];
+
 export interface TerrainData {
   meta: TerrainMeta;
   core: Grid;
   far: Grid;
   buildings: BuildingData[];
+  roads: RoadData[];
+  trees: TreeData[];
 }
 
 export async function loadTerrain(baseUrl: string): Promise<TerrainData> {
@@ -77,12 +113,15 @@ export async function loadTerrain(baseUrl: string): Promise<TerrainData> {
     return res;
   };
   const meta: TerrainMeta = await (await get('meta.json')).json();
-  const [coreBuf, farBuf, buildings] = await Promise.all([
+  const [coreBuf, farBuf, buildings, roads, trees] = await Promise.all([
     get('core.bin').then((r) => r.arrayBuffer()),
     get('far.bin').then((r) => r.arrayBuffer()),
     get('buildings.json').then((r) => r.json() as Promise<BuildingData[]>),
+    get('roads.json').then((r) => r.json() as Promise<RoadData[]>),
+    get('trees.json').then((r) => r.json() as Promise<TreeData[]>),
   ]);
   core = toGrid(coreBuf, meta.core);
   far = toGrid(farBuf, meta.far);
-  return { meta, core, far, buildings };
+  fillInlandPits(core);
+  return { meta, core, far, buildings, roads, trees };
 }

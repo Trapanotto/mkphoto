@@ -21,6 +21,9 @@ export interface Obstacle {
 /** Vertical prism over a polygon (buildings). */
 export class Prism implements Obstacle {
   owner?: string;
+  /** Hip roof on top: rises with the distance from the edge, up to roofRise. */
+  roofRise = 0;
+  roofSlope = 1;
   minX = Infinity;
   maxX = -Infinity;
   minZ = Infinity;
@@ -68,8 +71,12 @@ export class Prism implements Obstacle {
     return inside ? -best : best;
   }
 
-  topAt() {
-    return this.top;
+  private readonly n = { x: 0, z: 0 };
+
+  topAt(x: number, z: number) {
+    if (!this.roofRise) return this.top;
+    const inside = -this.distance(x, z, this.n);
+    return this.top + Math.min(this.roofRise, Math.max(0, inside) * this.roofSlope);
   }
 }
 

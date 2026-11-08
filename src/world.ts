@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createLandmarks, type Landmark } from './landmarks';
-import { ObstacleIndex, Prism } from './obstacles';
+import { buildingsMesh } from './buildings';
+import { ObstacleIndex } from './obstacles';
 import { addHull } from './outline';
 import { heightAt, terrainAt, WATER_EPS, type Grid, type TerrainData } from './terrain';
 import { toon } from './toon';
@@ -65,67 +66,6 @@ function terrainMesh(grid: Grid, colorAt: (h: number, steep: number, x: number, 
   const mat = toon('#ffffff');
   mat.vertexColors = true;
   return new THREE.Mesh(geo, mat);
-}
-
-/** Extrudes all building footprints into one mesh with flat roofs. */
-function buildingsMesh(data: TerrainData['buildings'], obstacles: ObstacleIndex) {
-  const rand = random(7);
-  const walls = ['#f2e6d0', '#e8d2b0', '#ffffff', '#f0d9c4', '#e6c9a8', '#d9d2c4'];
-  const roofs = ['#9a4a32', '#8a3a2a', '#a65a3a', '#7a4030'];
-  const modernWall = '#cfd6dc';
-  const modernRoof = '#7c8288';
-  const positions: number[] = [];
-  const colors: number[] = [];
-
-  const push = (x: number, y: number, z: number, color: THREE.Color) => {
-    positions.push(x, y, z);
-    colors.push(color.r, color.g, color.b);
-  };
-
-  for (const b of data) {
-    const ring = b.ring;
-    if (ring.length < 3) continue;
-    const bottom = b.base - 2;
-    const top = b.base + b.height;
-    const modern = b.height > 24;
-    const wall = new THREE.Color(modern ? modernWall : walls[Math.floor(rand() * walls.length)]);
-    const roof = new THREE.Color(modern ? modernRoof : roofs[Math.floor(rand() * roofs.length)]);
-
-    // winding: make the ring counter-clockwise seen from above (x right, z down → clockwise in x/z)
-    let area = 0;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) area += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]);
-    const pts = area > 0 ? ring : [...ring].reverse();
-
-    for (let i = 0; i < pts.length; i++) {
-      const [x1, z1] = pts[i];
-      const [x2, z2] = pts[(i + 1) % pts.length];
-      push(x1, bottom, z1, wall);
-      push(x2, bottom, z2, wall);
-      push(x2, top, z2, wall);
-      push(x1, bottom, z1, wall);
-      push(x2, top, z2, wall);
-      push(x1, top, z1, wall);
-    }
-    const shape = pts.map(([x, z]) => new THREE.Vector2(x, z));
-    const tris = THREE.ShapeUtils.triangulateShape(shape, []);
-    for (const tri of tris) {
-      const [a, b2, c2] = tri.map((k) => pts[k]);
-      // keep the roof facing up whatever winding the triangulation returns
-      const up = (b2[0] - a[0]) * (c2[1] - a[1]) - (b2[1] - a[1]) * (c2[0] - a[0]) < 0;
-      for (const p of up ? [a, b2, c2] : [a, c2, b2]) push(p[0], top, p[1], roof);
-    }
-    obstacles.add(new Prism(ring, bottom, top));
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  const mat = toon('#ffffff');
-  mat.vertexColors = true;
-  const mesh = new THREE.Mesh(geo, mat);
-  addHull(mesh, 0.15);
-  return mesh;
 }
 
 export function createWorld(scene: THREE.Scene, data: TerrainData): World {

@@ -266,7 +266,7 @@ async function start() {
 
   // handle for poking at the game from the browser console during development
   if (import.meta.env.DEV) {
-    Object.assign(window, { mk: { drone, camera, scene, world, photo, follow, clock, studio, menu, get game() { return game; } } });
+    Object.assign(window, { mk: { drone, camera, scene, world, photo, follow, clock, studio, menu, outlines, renderer, get game() { return game; } } });
   }
 
   // --- Resize & quality -------------------------------------------------------------

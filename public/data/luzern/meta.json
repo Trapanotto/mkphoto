@@ -15,6 +15,6 @@
     "count": 121
   },
   "heightUnit": "dm above lake level, Int16, rows north to south",
-  "attribution": "© swisstopo (swissALTI3D, swissSURFACE3D, VECTOR25)",
+  "attribution": "© swisstopo (swissALTI3D, swissSURFACE3D, VECTOR25, swissTLM3D)",
   "created": "2026-11-08"
 }

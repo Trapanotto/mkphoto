@@ -8,6 +8,8 @@
 //   swissSURFACE3D Raster (surface)    https://data.geo.admin.ch/api/stac/v0.9/collections/ch.swisstopo.swisssurface3d-raster
 //   VECTOR25 buildings                 api3.geo.admin.ch identify, layer ch.swisstopo.vec25-gebaeude
 //   Height profiles (far terrain)      api3.geo.admin.ch/rest/services/profile.json
+//   swissTLM3D roads and paths         api3.geo.admin.ch identify, layer ch.swisstopo.swisstlm3d-strassen
+//   Trees                              derived: surface minus terrain, uneven, outside buildings
 import { fromArrayBuffer, fromUrl } from 'geotiff';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -210,6 +212,87 @@ for (const f of features) {
 }
 console.log(`  ${buildings.length} buildings`);
 
+console.log('Roads and paths (swissTLM3D)');
+const roadFeatures = new Map();
+{
+  const cell = 100;
+  for (let e = core.e0; e < core.e0 + CORE_SIZE; e += cell) {
+    for (let n = core.n0; n < core.n0 + CORE_SIZE; n += cell) {
+      const url =
+        'https://api3.geo.admin.ch/rest/services/api/MapServer/identify?' +
+        new URLSearchParams({
+          geometry: `${e},${n},${e + cell},${n + cell}`,
+          geometryType: 'esriGeometryEnvelope',
+          layers: 'all:ch.swisstopo.swisstlm3d-strassen',
+          tolerance: '0',
+          sr: '2056',
+          geometryFormat: 'geojson',
+          returnGeometry: 'true',
+          limit: '200',
+        });
+      const res = await json(url);
+      if (res.results.length >= 200) console.warn(`  cell ${e},${n} hit the 200 limit`);
+      for (const f of res.results) roadFeatures.set(f.id, f);
+      await sleep(40);
+    }
+  }
+}
+const roads = [];
+for (const f of roadFeatures.values()) {
+  const p = f.properties;
+  // 8 and 9: main roads with traffic; the rest: lanes, squares and footpaths
+  const kind = (p.objektart === 8 || p.objektart === 9) && p.verkehrsbeschraenkung === 100 ? 'car' : 'walk';
+  for (const line of f.geometry.coordinates) {
+    const pts = line.map(([e, n]) => local(e, n)).filter(([x, z]) => Math.abs(x) < CORE_SIZE / 2 && Math.abs(z) < CORE_SIZE / 2);
+    if (pts.length >= 2) roads.push({ kind, type: p.objektart, name: p.strassenname ?? null, pts });
+  }
+}
+console.log(`  ${roads.length} road pieces`);
+
+console.log('Trees (surface minus terrain)');
+const trees = [];
+{
+  const step = 2;
+  const nx = CORE_SIZE / step;
+  const ndsm = new Float32Array(nx * nx);
+  const rings = buildings.map((b) => b.ring);
+  const boxes = rings.map((r) => [
+    Math.min(...r.map((p) => p[0])), Math.max(...r.map((p) => p[0])),
+    Math.min(...r.map((p) => p[1])), Math.max(...r.map((p) => p[1])),
+  ]);
+  const inBuilding = (x, z) =>
+    rings.some((r, i) => x >= boxes[i][0] - 2 && x <= boxes[i][1] + 2 && z >= boxes[i][2] - 2 && z <= boxes[i][3] + 2 && insidePolygon(r, x, z));
+  for (let j = 0; j < nx; j++)
+    for (let i = 0; i < nx; i++) {
+      const e = core.e0 + i * step + 1, n = core.n0 + CORE_SIZE - j * step - 1;
+      const t = dtm(e, n);
+      const d = dsm(e, n) - t;
+      ndsm[j * nx + i] = Number.isNaN(d) || t <= LAKE_LEVEL + 0.3 ? 0 : d;
+    }
+  const at = (i, j) => (i < 0 || j < 0 || i >= nx || j >= nx ? 0 : ndsm[j * nx + i]);
+  for (let j = 2; j < nx - 2; j++)
+    for (let i = 2; i < nx - 2; i++) {
+      const h = at(i, j);
+      if (h < 4 || h > 35) continue;
+      // crown top: highest point within 4 m, and the surface around it is uneven (roofs are flat)
+      let top = true, sum = 0, sum2 = 0, cnt = 0;
+      for (let dj = -2; dj <= 2 && top; dj++)
+        for (let di = -2; di <= 2; di++) {
+          const v = at(i + di, j + dj);
+          if (v > h) { top = false; break; }
+          sum += v; sum2 += v * v; cnt++;
+        }
+      if (!top) continue;
+      const variance = sum2 / cnt - (sum / cnt) ** 2;
+      if (variance < 1.5) continue;
+      const x = -CORE_SIZE / 2 + i * step + 1, z = -CORE_SIZE / 2 + j * step + 1;
+      if (inBuilding(x, z)) continue;
+      if (trees.some((t) => Math.abs(t[0] - x) < 5 && Math.abs(t[1] - z) < 5)) continue;
+      trees.push([x, z, +h.toFixed(1)]);
+    }
+}
+console.log(`  ${trees.length} trees`);
+
 console.log('Far terrain (profile service, 200 m)');
 const farCount = FAR_SIZE / FAR_STEP + 1;
 const farHeights = new Int16Array(farCount * farCount);
@@ -230,6 +313,8 @@ for (let j = 0; j < farCount; j++) {
 await writeFile(new URL('core.bin', OUT), Buffer.from(coreHeights.buffer));
 await writeFile(new URL('far.bin', OUT), Buffer.from(farHeights.buffer));
 await writeFile(new URL('buildings.json', OUT), JSON.stringify(buildings));
+await writeFile(new URL('roads.json', OUT), JSON.stringify(roads));
+await writeFile(new URL('trees.json', OUT), JSON.stringify(trees));
 await writeFile(
   new URL('meta.json', OUT),
   JSON.stringify(
@@ -239,7 +324,7 @@ await writeFile(
       core: { size: CORE_SIZE, step: CORE_STEP, count: core.count },
       far: { size: FAR_SIZE, step: FAR_STEP, count: farCount },
       heightUnit: 'dm above lake level, Int16, rows north to south',
-      attribution: '© swisstopo (swissALTI3D, swissSURFACE3D, VECTOR25)',
+      attribution: '© swisstopo (swissALTI3D, swissSURFACE3D, VECTOR25, swissTLM3D)',
       created: new Date().toISOString().slice(0, 10),
     },
     null,

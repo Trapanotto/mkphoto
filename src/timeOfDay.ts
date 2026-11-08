@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { windowNight } from './buildings';
 import { outlineColor } from './outline';
 import type { Sky } from './sky';
 
@@ -94,6 +95,7 @@ export class TimeOfDay {
     mixColor(outlineColor, a.outline, b.outline, t);
     env.sky.starOpacity = num('stars');
     env.windows.color.copy(WINDOW_OFF).lerp(WINDOW_ON, num('windows'));
+    windowNight.value = num('windows');
 
     // sun path: rises in the east (+x), sets in the west; the moon takes over at night
     const angle = ((this.hour - 6) / 12) * Math.PI;
