@@ -10,6 +10,15 @@ export interface PhotoMeta {
   width: number;
   height: number;
   tags: string[];
+  rating?: PhotoRating;
+}
+
+export interface PhotoRating {
+  stars: number;
+  comment: string;
+  lines: string[];
+  assignment?: string;
+  fulfilled: boolean;
 }
 
 export interface Photo extends PhotoMeta {

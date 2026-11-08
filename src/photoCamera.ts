@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Drone } from './drone';
 import type { Landmark } from './landmarks';
 import type { Photo } from './photos';
+import type { FrameNdc, SubjectView } from './rating';
 
 export type GridMode = 'thirds' | 'golden' | 'horizon' | 'off';
 const GRIDS: GridMode[] = ['thirds', 'golden', 'horizon', 'off'];
@@ -38,6 +39,7 @@ export class PhotoCamera {
   private readonly info = $('vf-info');
   private readonly flash = $('vf-flash');
   private readonly forward = new THREE.Vector3();
+  private readonly marks = $('vf-marks');
 
   constructor(canvas: HTMLElement) {
     canvas.addEventListener(
@@ -119,6 +121,53 @@ export class PhotoCamera {
     this.info.textContent =
       `${Math.round(this.focal)} mm · ${(this.focal / MIN_FOCAL).toFixed(1)}× · ` +
       `Neigung ${Math.round(THREE.MathUtils.radToDeg(this.gimbal))}° · Raster: ${GRID_LABEL[this.grid]}`;
+  }
+
+  /** The frame rectangle in the full-screen camera's NDC. */
+  frameNdc(): FrameNdc {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const f = this.frame;
+    return {
+      x0: (f.x / W) * 2 - 1,
+      x1: ((f.x + f.w) / W) * 2 - 1,
+      y0: 1 - ((f.y + f.h) / H) * 2,
+      y1: 1 - (f.y / H) * 2,
+    };
+  }
+
+  /** Corner brackets around the subjects in view, green when they are well visible. */
+  showMarks(views: SubjectView[]) {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    while (this.marks.children.length < views.length) {
+      const m = document.createElement('div');
+      m.className = 'vf-mark';
+      m.append(document.createElement('span'));
+      this.marks.append(m);
+    }
+    views.forEach((v, i) => {
+      const m = this.marks.children[i] as HTMLElement;
+      if (!v.box) {
+        m.hidden = true;
+        return;
+      }
+      m.hidden = false;
+      const left = ((v.box.minX + 1) / 2) * W;
+      const right = ((v.box.maxX + 1) / 2) * W;
+      const top = ((1 - v.box.maxY) / 2) * H;
+      const bottom = ((1 - v.box.minY) / 2) * H;
+      const pad = 6;
+      Object.assign(m.style, {
+        left: `${left - pad}px`,
+        top: `${top - pad}px`,
+        width: `${Math.max(16, right - left + pad * 2)}px`,
+        height: `${Math.max(16, bottom - top + pad * 2)}px`,
+      });
+      m.dataset.state = v.presence >= 0.6 ? 'ok' : 'warn';
+      m.firstElementChild!.textContent = v.presence >= 0.6 ? v.name : `${v.name} · ${Math.round(v.presence * 100)} % sichtbar`;
+    });
+    for (let i = views.length; i < this.marks.children.length; i++) (this.marks.children[i] as HTMLElement).hidden = true;
   }
 
   /** Output size of a photo: 1800×1200, or 1200×1800 in portrait. */

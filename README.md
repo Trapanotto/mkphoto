@@ -8,6 +8,7 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 
 - **M0 Grundgerüst:** Vite + TypeScript + three.js, automatisches Deployment auf GitHub Pages
 - **M1 Fliegen:** Flugmodell mit Assist- und Pro-Modus, Follow-Kamera, Akku (12 min, Laden auf dem Startplatz), Wind mit Böen, Flugverbot über 120 m und ausserhalb des Gebiets
+- **M4 Foto-Bewertung:** Messpunkte an Kapellbrücke und Wasserturm, Sicht- und Verdeckungstest, Teilnoten für Motiv, Komposition (Drittel, Horizont), Licht (Tageszeit, Gegenlicht), Kundenwunsch und Technik (Wind, Drehung), Bonus für besondere Perspektiven, 0–5 Sterne mit Kundenkommentar; Testauftrag „Postkarte: Kapellbrücke mit Wasserturm“, Motiv-Markierung im Sucher
 - **M3 Erstes Motiv:** echtes Gelände von Luzern aus swisstopo-Daten (swissALTI3D, swissSURFACE3D, VECTOR25, Höhenprofile für Pilatus und Rigi), Kapellbrücke und Wasserturm als Modelle, Kameramodus mit 24–72 mm, Gimbal und Raster, Fotos in 1800×1200 px, Album mit Download und Teilen
 - **M2 Look:** Toon-Shading, Konturlinien (Post-Process mit Tiefen- und Normalenkanten, auf schwachen Geräten Inverted Hull), Himmel mit Tageszeit-Paletten (Morgen, Mittag, Abend, Nacht mit Sternen und leuchtenden Fenstern), Nebel, Wolken, Bäume, Häuser; automatische Grafikstufen (Ziel 60 fps Desktop, 30 fps Mobile)
 

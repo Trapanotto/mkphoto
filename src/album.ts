@@ -1,4 +1,5 @@
 import { deletePhoto, listPhotos, type Photo } from './photos';
+import { setStars, starNumber } from './ratingCard';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -83,6 +84,12 @@ export class Album {
       const label = document.createElement('span');
       label.textContent = p.tags.join(' · ') || 'Ohne Motiv';
       button.append(img, label);
+      if (p.rating) {
+        const stars = document.createElement('span');
+        setStars(stars, p.rating.stars);
+        stars.classList.add('album-stars');
+        button.append(stars);
+      }
       button.addEventListener('click', () => this.showPhoto(p));
       this.grid.append(button);
     }
@@ -95,7 +102,8 @@ export class Album {
     this.meta.textContent =
       `${p.tags.join(' · ') || 'Ohne Motiv'}\n` +
       `${date} · Spielzeit ${p.gameTime}\n` +
-      `${p.focal} mm · Neigung ${p.gimbal}° · Höhe ${p.altitude} m · ${p.width}×${p.height} px`;
+      `${p.focal} mm · Neigung ${p.gimbal}° · Höhe ${p.altitude} m · ${p.width}×${p.height} px` +
+      (p.rating ? `\n\n${starNumber(p.rating.stars)} ★ · ${p.rating.lines.join('\n')}\n«${p.rating.comment}»` : '');
     this.shareButton.hidden = !this.canShare(p);
     this.lightbox.hidden = false;
   }

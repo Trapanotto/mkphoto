@@ -3,10 +3,17 @@ import { ObstacleIndex, Strip, Tower } from './obstacles';
 import { addHull } from './outline';
 import { toon } from './toon';
 
+/** A point on a landmark used to judge photos. Points with a normal only count from the side they face. */
+export interface SubjectPoint {
+  p: THREE.Vector3;
+  n?: THREE.Vector3;
+}
+
 export interface Landmark {
   id: string;
   name: string;
   box: THREE.Box3;
+  points: SubjectPoint[];
 }
 
 /**
@@ -142,16 +149,44 @@ export function createLandmarks(scene: THREE.Scene, obstacles: ObstacleIndex, wi
     const [ax, az] = BRIDGE_PATH[i];
     const [bx, bz] = BRIDGE_PATH[i + 1];
     bridge.add(bridgeSection(ax, az, bx, bz, materials));
-    obstacles.add(new Strip(ax, az, bx, bz, HALF_WIDTH + 0.5, DECK - 0.35, EAVES, RIDGE));
+    const strip = new Strip(ax, az, bx, bz, HALF_WIDTH + 0.5, DECK - 0.35, EAVES, RIDGE);
+    strip.owner = 'kapellbruecke';
+    obstacles.add(strip);
   }
   scene.add(bridge);
 
   const tower = wasserturm(windows);
   scene.add(tower);
-  obstacles.add(new Tower(TOWER.x, TOWER.z, TOWER.radius + 0.3, -3, TOWER.wallTop, TOWER.roofRadius, TOWER.roofTop));
+  const towerObstacle = new Tower(TOWER.x, TOWER.z, TOWER.radius + 0.3, -3, TOWER.wallTop, TOWER.roofRadius, TOWER.roofTop);
+  towerObstacle.owner = 'wasserturm';
+  obstacles.add(towerObstacle);
+
+  // bridge: points along the centre line every ~6 m, at wall and roof height
+  const bridgePoints: SubjectPoint[] = [];
+  for (let i = 0; i < BRIDGE_PATH.length - 1; i++) {
+    const [ax, az] = BRIDGE_PATH[i];
+    const [bx, bz] = BRIDGE_PATH[i + 1];
+    const steps = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 6));
+    for (let k = 0; k < steps; k++) {
+      const t = k / steps;
+      const x = ax + (bx - ax) * t;
+      const z = az + (bz - az) * t;
+      bridgePoints.push({ p: new THREE.Vector3(x, DECK + 1.2, z) }, { p: new THREE.Vector3(x, RIDGE - 0.3, z) });
+    }
+  }
+  // tower: eight sides at three heights, facing outwards, plus the roof tip
+  const towerPoints: SubjectPoint[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const n = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+    for (const y of [4, 13, 22]) {
+      towerPoints.push({ p: new THREE.Vector3(TOWER.x, y, TOWER.z).addScaledVector(n, TOWER.radius + 0.4), n });
+    }
+  }
+  towerPoints.push({ p: new THREE.Vector3(TOWER.x, TOWER.roofTop - 0.5, TOWER.z) });
 
   return [
-    { id: 'kapellbruecke', name: 'Kapellbrücke', box: new THREE.Box3().setFromObject(bridge) },
-    { id: 'wasserturm', name: 'Wasserturm', box: new THREE.Box3().setFromObject(tower) },
+    { id: 'kapellbruecke', name: 'Kapellbrücke', box: new THREE.Box3().setFromObject(bridge), points: bridgePoints },
+    { id: 'wasserturm', name: 'Wasserturm', box: new THREE.Box3().setFromObject(tower), points: towerPoints },
   ];
 }

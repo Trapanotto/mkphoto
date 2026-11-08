@@ -636,3 +636,284 @@ body[data-mode='camera'] .hud {
 .lightbox-actions button[hidden] {
   display: none;
 }
+
+/* --- Stars ------------------------------------------------------------------------ */
+
+.stars {
+  display: inline-block;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #ffc531 var(--fill, 0%), rgba(255, 255, 255, 0.25) var(--fill, 0%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- Brief ------------------------------------------------------------------------- */
+
+.brief {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 76px);
+  left: max(12px, env(safe-area-inset-left));
+  width: 230px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.brief[hidden] {
+  display: none;
+}
+
+.brief small {
+  display: block;
+  opacity: 0.65;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+
+.brief b {
+  display: block;
+  font-size: 13px;
+  margin: 2px 0 4px;
+}
+
+.brief p {
+  margin: 0 0 4px;
+}
+
+.brief-from {
+  opacity: 0.7;
+}
+
+.brief-best {
+  font-weight: 700;
+  color: #ffc531;
+}
+
+body[data-mode='camera'] .brief {
+  opacity: 0.75;
+}
+
+/* phones: title and result only */
+@media (max-width: 520px), (max-height: 460px) {
+  .brief {
+    width: 180px;
+    top: calc(max(12px, env(safe-area-inset-top)) + 70px);
+  }
+
+  .brief #brief-text,
+  .brief .brief-from {
+    display: none;
+  }
+}
+
+/* --- Viewfinder marks ---------------------------------------------------------- */
+
+.vf-marks {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-mark {
+  position: absolute;
+  --c: rgba(255, 255, 255, 0.9);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / 14px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) top left / 2px 14px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 14px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 2px 14px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 14px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 2px 14px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 14px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 2px 14px no-repeat;
+}
+
+.vf-mark[hidden] {
+  display: none;
+}
+
+.vf-mark[data-state='ok'] {
+  --c: #5fd068;
+}
+
+.vf-mark[data-state='warn'] {
+  --c: #f2c230;
+}
+
+.vf-mark span {
+  position: absolute;
+  left: 0;
+  top: -20px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--c);
+}
+
+/* --- Rating card ---------------------------------------------------------------- */
+
+.rating {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.rating[hidden] {
+  display: none;
+}
+
+.rating-card {
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: #151515;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.rating-card img {
+  width: 100%;
+  max-height: 34vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #000;
+}
+
+.rating-head h2 {
+  margin: 10px 0 2px;
+  font-size: 17px;
+}
+
+.rating-score {
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-status {
+  margin: 2px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f2c230;
+}
+
+.rating-status[data-ok='true'] {
+  color: #5fd068;
+}
+
+.rating-criteria {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.crit-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.crit-head b {
+  width: 110px;
+  flex: none;
+}
+
+.crit-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.crit-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: #5fd068;
+}
+
+.crit-bar i[data-level='mid'] {
+  background: #f2c230;
+}
+
+.crit-bar i[data-level='low'] {
+  background: #ff6a4d;
+}
+
+.rating-criteria p {
+  margin: 2px 0 0 120px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+@media (max-width: 420px) {
+  .crit-head b {
+    width: 92px;
+  }
+
+  .rating-criteria p {
+    margin-left: 0;
+  }
+}
+
+.rating-bonus {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffc531;
+}
+
+.rating-bonus[hidden] {
+  display: none;
+}
+
+.rating-card blockquote {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-left: 3px solid #ffc531;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0 8px 8px 0;
+}
+
+.rating-card blockquote p {
+  margin: 0 0 4px;
+  font-style: italic;
+}
+
+.rating-card blockquote footer {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rating-card button {
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffc531;
+  color: #111;
+  font: 800 15px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.album-stars {
+  font-size: 14px;
+}

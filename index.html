@@ -18,10 +18,18 @@
     <header class="brand">
       <svg viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
       <span>MKPHOTO</span>
-      <small>M3 · Erstes Motiv</small>
+      <small>M4 · Bewertung</small>
     </header>
     <pre id="stats" class="stats"></pre>
     <p id="credits" class="credits"></p>
+
+    <aside id="brief" class="brief" hidden aria-label="Auftrag">
+      <small>Auftrag</small>
+      <b id="brief-title"></b>
+      <p id="brief-text"></p>
+      <p id="brief-from" class="brief-from"></p>
+      <p id="brief-best" class="brief-best"></p>
+    </aside>
 
     <section class="hud" aria-label="Fluganzeige">
       <div class="battery">
@@ -44,6 +52,7 @@
         <i class="cross"></i>
         <p id="vf-info" class="vf-info"></p>
       </div>
+      <div id="vf-marks" class="vf-marks"></div>
       <div id="vf-flash" class="vf-flash"></div>
     </div>
 
@@ -81,6 +90,24 @@
       <button id="btn-shutter" class="shutter camera-only" type="button" aria-label="Auslösen"></button>
       <p class="rotate-hint">Tipp: Handy quer halten</p>
     </div>
+
+    <section id="rating" class="rating" hidden aria-label="Bewertung">
+      <div class="rating-card">
+        <img id="rating-img" alt="Dein Foto" />
+        <div class="rating-head">
+          <h2 id="rating-title"></h2>
+          <div class="rating-score"><span id="rating-stars"></span> <span id="rating-number"></span></div>
+          <p id="rating-status" class="rating-status"></p>
+        </div>
+        <ul id="rating-criteria" class="rating-criteria"></ul>
+        <p id="rating-bonus" class="rating-bonus" hidden></p>
+        <blockquote>
+          <p id="rating-comment"></p>
+          <footer id="rating-from"></footer>
+        </blockquote>
+        <button id="rating-close" type="button">Weiter</button>
+      </div>
+    </section>
 
     <section id="album" class="album" hidden aria-label="Album">
       <header class="album-head">

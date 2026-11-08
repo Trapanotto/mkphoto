@@ -1,6 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { Album, shutterSound } from './album';
+import { TEST_ASSIGNMENT } from './assignments';
 import { Drone, type FlightInput } from './drone';
 import { FollowCamera } from './followCamera';
 import { Hud } from './hud';
@@ -8,6 +9,8 @@ import { Input, type Action } from './input';
 import { OutlineRenderer } from './outline';
 import { PhotoCamera } from './photoCamera';
 import { savePhoto } from './photos';
+import { analyseSubject, ratePhoto } from './rating';
+import { BriefPanel, loadBest, RatingCard, saveBest } from './ratingCard';
 import { LEVELS, Quality } from './quality';
 import { Sky } from './sky';
 import { loadTerrain } from './terrain';
@@ -60,6 +63,12 @@ async function start() {
   const follow = new FollowCamera(camera, canvas, heightAt, (x, y, z) => world.obstacles.solidAt(x, y, z, 0.4));
   const photo = new PhotoCamera(canvas);
   const album = new Album();
+  const ratingCard = new RatingCard();
+  const brief = new BriefPanel();
+  const assignment = TEST_ASSIGNMENT;
+  brief.show(assignment, loadBest(assignment.id));
+  const markedLandmarks = world.landmarks.filter((l) => assignment.subjects.includes(l.id));
+  let lastMarks = 0;
   const hud = new Hud();
 
   const buttons: [string, Action][] = [
@@ -165,9 +174,14 @@ async function start() {
     const c = input.read();
 
     // menus and modes; Escape / B closes the innermost thing first
+    if (ratingCard.isOpen) {
+      if (c.back || c.shoot) ratingCard.close();
+      c.back = c.shoot = c.album = false;
+    }
     if (c.back && !album.back() && photo.active) setCamera(false);
     if (c.album) album.toggle();
-    if (!album.isOpen) {
+    const paused = album.isOpen || ratingCard.isOpen;
+    if (!paused) {
       if (c.toggleCamera) setCamera(!photo.active);
       if (photo.active) {
         if (c.cycleGrid) photo.cycleGrid();
@@ -189,14 +203,20 @@ async function start() {
     wind.at(drone.altitude, localWind);
 
     let view = camera;
-    if (album.isOpen) {
+    if (paused) {
       drone.update(dt, idle, still, world);
+      if (photo.active) photo.update(dt, { tilt: 0, zoom: 0 }, drone);
     } else if (photo.active) {
       // the drone holds its position; slower turning at long focal lengths for precise framing
       const turn = c.camYaw * 0.45 * (24 / photo.focal);
       drone.update(dt, { ...idle, yaw: turn }, still, world);
       photo.update(dt, { tilt: c.camTilt, zoom: c.camZoom }, drone);
       view = photo.camera;
+      if (time - lastMarks > 100) {
+        lastMarks = time;
+        const frame = photo.frameNdc();
+        photo.showMarks(markedLandmarks.map((lm) => analyseSubject(lm, photo.camera, world.obstacles, frame)));
+      }
     } else {
       drone.update(dt, c, localWind, world);
     }
@@ -205,7 +225,7 @@ async function start() {
 
     outlines.render(scene, view);
 
-    if (photo.active && c.shoot && !capturing && !album.isOpen) {
+    if (photo.active && c.shoot && !capturing && !paused) {
       capturing = true;
       shutterSound();
       // render the framed view once more at photo size, copy it, then restore the screen
@@ -213,15 +233,40 @@ async function start() {
       renderer.setPixelRatio(1);
       renderer.setSize(w, h, false);
       outlines.setSize(w, h);
-      outlines.render(scene, photo.prepareShot());
+      const shotCamera = photo.prepareShot();
+      outlines.render(scene, shotCamera);
       const shot = photo.capture(canvas, world.landmarks, { gameTime: clock.label, altitude: drone.altitude });
       resize();
       outlines.render(scene, view);
+      const rating = ratePhoto({
+        camera: shotCamera,
+        landmarks: world.landmarks,
+        obstacles: world.obstacles,
+        assignment,
+        hour: clock.hour,
+        sunDir: sky.sunDir,
+        windStrength: Math.hypot(localWind.x, localWind.z),
+        turnRate: Math.min(1, Math.abs(c.camYaw)),
+        focal: photo.focal,
+        gimbal: photo.gimbal,
+        altitude: drone.altitude,
+        portrait: photo.portrait,
+      });
       shot
         .then(async (p) => {
+          p.tags = rating.subjects;
+          p.rating = {
+            stars: rating.stars,
+            comment: rating.comment,
+            lines: [...rating.criteria.map((cr) => `${cr.label}: ${cr.text}`), ...rating.bonus.map((b) => `Bonus: ${b}`)],
+            assignment: rating.assignmentId,
+            fulfilled: rating.fulfilled,
+          };
           const stored = await savePhoto(p);
-          const subject = p.tags.length ? p.tags.join(' · ') : 'kein Motiv erkannt';
-          showToast(`Foto gespeichert: ${subject}${stored ? '' : ' (nur bis zum Neuladen)'}`);
+          saveBest(assignment.id, rating.stars);
+          brief.show(assignment, loadBest(assignment.id));
+          ratingCard.show(rating, p.thumb, assignment);
+          if (!stored) showToast('Foto nur bis zum Neuladen gespeichert');
         })
         .catch(() => showToast('Foto konnte nicht gespeichert werden'))
         .finally(() => (capturing = false));

@@ -10,6 +10,8 @@ export interface Obstacle {
   minZ: number;
   maxZ: number;
   bottom: number;
+  /** Landmark this belongs to, so a landmark does not hide itself in the visibility test. */
+  owner?: string;
   /** Signed distance to the footprint edge; writes the outward normal into n. */
   distance(x: number, z: number, n: { x: number; z: number }): number;
   /** Height of the top surface at a point inside the footprint. */
@@ -18,6 +20,7 @@ export interface Obstacle {
 
 /** Vertical prism over a polygon (buildings). */
 export class Prism implements Obstacle {
+  owner?: string;
   minX = Infinity;
   maxX = -Infinity;
   minZ = Infinity;
@@ -72,6 +75,7 @@ export class Prism implements Obstacle {
 
 /** Straight strip with a gable roof (a bridge section). */
 export class Strip implements Obstacle {
+  owner?: string;
   minX: number;
   maxX: number;
   minZ: number;
@@ -132,6 +136,7 @@ export class Strip implements Obstacle {
 
 /** Round tower with a cone roof. */
 export class Tower implements Obstacle {
+  owner?: string;
   minX: number;
   maxX: number;
   minZ: number;
@@ -201,8 +206,9 @@ export class ObstacleIndex {
   }
 
   /** True if the point is inside a solid obstacle (with a margin around it). */
-  solidAt(x: number, y: number, z: number, margin = 0) {
+  solidAt(x: number, y: number, z: number, margin = 0, ignoreOwner?: string) {
     for (const o of this.near(x, z)) {
+      if (ignoreOwner && o.owner === ignoreOwner) continue;
       if (o.distance(x, z, this.n) > margin) continue;
       if (y >= o.bottom - margin && y <= o.topAt(x, z) + margin) return true;
     }
