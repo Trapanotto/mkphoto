@@ -917,3 +917,316 @@ body[data-mode='camera'] .brief {
 .album-stars {
   font-size: 14px;
 }
+
+/* --- Screens: menu hides the game UI ----------------------------------------- */
+
+body[data-screen='menu'] .hud,
+body[data-screen='menu'] .brief,
+body[data-screen='menu'] .touch,
+body[data-screen='menu'] .help,
+body[data-screen='menu'] .brand,
+body[data-screen='menu'] .stats {
+  display: none !important;
+}
+
+button.secondary {
+  background: #2a2a2a !important;
+  color: #fff !important;
+}
+
+/* --- Main menu & intro ---------------------------------------------------------- */
+
+.menu,
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.55));
+}
+
+.intro {
+  z-index: 29;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.menu[hidden],
+.intro[hidden] {
+  display: none;
+}
+
+.menu-card {
+  width: min(380px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(10, 10, 10, 0.82);
+  text-align: center;
+}
+
+.menu-logo {
+  width: 88px;
+  height: 88px;
+  color: #fff;
+}
+
+.menu-card h1 {
+  margin: 4px 0 0;
+  font-size: 32px;
+  letter-spacing: 0.06em;
+}
+
+.menu-claim {
+  margin: 0 0 18px;
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+.menu-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+.menu-buttons[hidden],
+.menu-buttons button[hidden] {
+  display: none;
+}
+
+.menu-card button {
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #2a2a2a;
+  color: #fff;
+  font: 700 15px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.menu-card button:first-child,
+#intro-go {
+  background: #ffc531;
+  color: #111;
+}
+
+.intro .menu-card {
+  text-align: left;
+  width: min(460px, 100%);
+}
+
+.intro p {
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+#intro-go {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* compact menu on small landscape phones */
+@media (max-height: 460px) {
+  .menu-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .menu-card h1 {
+    font-size: 22px;
+  }
+
+  .menu-claim {
+    margin-bottom: 10px;
+  }
+
+  .menu-buttons {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* --- Brief additions ------------------------------------------------------------- */
+
+.brief {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.brief-list {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+
+@media (max-width: 520px), (max-height: 460px) {
+  .brief-list {
+    display: none;
+  }
+}
+
+/* --- Rating card buttons ------------------------------------------------------- */
+
+#rating-submit {
+  margin-bottom: 8px;
+}
+
+#rating-submit[hidden] {
+  display: none;
+}
+
+/* --- Studio ------------------------------------------------------------------------- */
+
+.studio {
+  position: fixed;
+  inset: 0;
+  z-index: 27;
+  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px
+    max(16px, env(safe-area-inset-left));
+  background: #111;
+  touch-action: pan-y;
+}
+
+.studio[hidden] {
+  display: none;
+}
+
+.studio-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.studio-head h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.studio-wallet {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.studio-bar {
+  width: 220px;
+  max-width: 60vw;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.studio-bar i {
+  display: block;
+  height: 100%;
+  background: #ffc531;
+}
+
+.studio-next {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.studio button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffc531;
+  color: #111;
+  font: 700 14px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+#studio-close {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+.studio-jobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.job {
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  border-radius: 14px;
+  background: #1d1d1d;
+  border: 2px solid transparent;
+}
+
+.job[data-state='active'] {
+  border-color: #ffc531;
+}
+
+.job[data-state='locked'] {
+  opacity: 0.5;
+}
+
+.job header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.job h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.job-badge {
+  flex: none;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #333;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.job[data-state='active'] .job-badge {
+  background: #ffc531;
+  color: #111;
+}
+
+.job[data-state='done'] .job-badge {
+  background: #2f6b3a;
+}
+
+.job p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.job-client {
+  opacity: 0.7;
+}
+
+.job-reqs {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.job footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+  flex-wrap: wrap;
+}
+
+.job-pay {
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: auto;
+}

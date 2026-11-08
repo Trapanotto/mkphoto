@@ -18,6 +18,9 @@ export interface InputState {
   cycleGrid: boolean;
   album: boolean;
   back: boolean;
+  studio: boolean;
+  menu: boolean;
+  toggleOrientation: boolean;
   /** Photo camera axes: turn, tilt the gimbal, zoom. */
   camYaw: number;
   camTilt: number;
@@ -33,7 +36,10 @@ export type Action =
   | 'shoot'
   | 'cycleGrid'
   | 'album'
-  | 'back';
+  | 'back'
+  | 'studio'
+  | 'menu'
+  | 'toggleOrientation';
 
 const KEY_ACTIONS: Record<string, Action> = {
   KeyP: 'toggleMode',
@@ -47,6 +53,8 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyF: 'cycleGrid',
   Tab: 'album',
   Escape: 'back',
+  KeyM: 'studio',
+  KeyV: 'toggleOrientation',
 };
 
 const DEADZONE = 0.15;
@@ -103,6 +111,9 @@ export class Input {
       cycleGrid: this.pending.has('cycleGrid'),
       album: this.pending.has('album'),
       back: this.pending.has('back'),
+      studio: this.pending.has('studio'),
+      menu: this.pending.has('menu'),
+      toggleOrientation: this.pending.has('toggleOrientation'),
       camYaw: k('KeyD', 'KeyE', 'ArrowRight') - k('KeyA', 'KeyQ', 'ArrowLeft'),
       camTilt: k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown'),
       camZoom: k('Equal', 'NumpadAdd', 'BracketRight') - k('Minus', 'NumpadSubtract', 'Slash'),
@@ -140,7 +151,7 @@ export class Input {
     s.camZoom += lift;
 
     // edge-triggered buttons: A (0) shoot, B (1) home/back, X (2) time, Y (3) mode or grid,
-    // LB (4) camera, View/Back (8) graphics, Start/Menu (9) album
+    // LB (4) camera, View/Back (8) album, Start/Menu (9) menu
     const pressed = pad.buttons.map((b) => b.pressed);
     const down = (i: number) => pressed[i] && !this.padPrev[i];
     if (down(0)) s.shoot = true;
@@ -148,8 +159,9 @@ export class Input {
     if (down(2)) s.skipTime = true;
     if (down(3)) s.toggleMode = s.cycleGrid = true;
     if (down(4)) s.toggleCamera = true;
-    if (down(8)) s.cycleQuality = true;
-    if (down(9)) s.album = true;
+    if (down(5)) s.toggleOrientation = true;
+    if (down(8)) s.album = true;
+    if (down(9)) s.menu = true;
     if (pressed.some((p, i) => p && !this.padPrev[i])) this.device = 'gamepad';
     this.padPrev = pressed;
   }

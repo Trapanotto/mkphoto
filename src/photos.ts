@@ -26,36 +26,10 @@ export interface Photo extends PhotoMeta {
   thumb: Blob;
 }
 
-const DB_NAME = 'mkphoto';
-const STORE = 'photos';
+import { run as runIn, STORES } from './db';
+
 const memory: Photo[] = [];
-let dbPromise: Promise<IDBDatabase | null> | null = null;
-
-function db(): Promise<IDBDatabase | null> {
-  dbPromise ??= new Promise((resolve) => {
-    try {
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-  return dbPromise;
-}
-
-function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  return db().then(
-    (d) =>
-      new Promise<T>((resolve, reject) => {
-        if (!d) return reject(new Error('no storage'));
-        const req = fn(d.transaction(STORE, mode).objectStore(STORE));
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      }),
-  );
-}
+const run = <T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>) => runIn(STORES.photos, mode, fn);
 
 /** True if the photo was stored persistently, false if only in memory. */
 export async function savePhoto(photo: Photo): Promise<boolean> {

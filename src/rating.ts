@@ -242,6 +242,16 @@ function rateLight(ctx: RatingContext): Criterion {
   let score: number;
   let text: string;
   let hint = '';
+  if (ctx.assignment?.light === 'night') {
+    // a night job turns the scale around
+    if (h >= 21.5 || h < 5) [score, text] = [0.95, 'Nachtstimmung wie gewünscht'];
+    else if ((h >= 20 && h < 21.5) || (h >= 5 && h < 6.5)) [score, text] = [0.8, 'Blaue Stunde, fast Nacht'];
+    else {
+      [score, text] = [0.3, 'Zu hell für eine Nachtaufnahme'];
+      hint = 'es sollte Nacht sein';
+    }
+    return { key: 'light', label: 'Licht', score, text, hint };
+  }
   if ((h >= 6.5 && h < 9) || (h >= 17 && h < 20)) [score, text] = [1, 'Goldenes Licht'];
   else if ((h >= 9 && h < 11) || (h >= 15 && h < 17)) [score, text] = [0.85, 'Weiches Tageslicht'];
   else if (h >= 11 && h < 15) {
@@ -274,22 +284,34 @@ function headingOf(camera: THREE.Camera) {
   return THREE.MathUtils.radToDeg(Math.atan2(f.x, -f.z));
 }
 
+const inHours = (h: number, from: number, to: number) => (from <= to ? h >= from && h < to : h >= from || h < to);
+
 function rateBrief(a: Assignment, views: SubjectView[], ctx: RatingContext): Criterion {
-  const checks: { ok: boolean; label: string; weight: number }[] = [];
-  for (const v of views) checks.push({ ok: v.presence >= 0.5, label: `${v.name} gut sichtbar`, weight: 0.5 / views.length });
+  const subjectChecks = views.map((v) => ({ ok: v.presence >= 0.5, label: `${v.name} gut sichtbar` }));
+  const other: { ok: boolean; label: string }[] = [];
+  const halfFov = THREE.MathUtils.degToRad(ctx.camera.fov) / 2;
+  const horizonInFrame = Math.abs(Math.tan(-ctx.gimbal) / Math.tan(halfFov)) < 0.95;
+
   if (a.orientation) {
-    const ok = (a.orientation === 'portrait') === ctx.portrait;
-    checks.push({ ok, label: a.orientation === 'landscape' ? 'Querformat' : 'Hochformat', weight: 0.2 });
+    other.push({ ok: (a.orientation === 'portrait') === ctx.portrait, label: a.orientation === 'landscape' ? 'Querformat' : 'Hochformat' });
   }
   if (a.heading) {
     const hd = headingOf(ctx.camera);
-    const halfFov = THREE.MathUtils.degToRad(ctx.camera.fov) / 2;
-    const horizonInFrame = Math.abs(Math.tan(-ctx.gimbal) / Math.tan(halfFov)) < 0.95;
-    const ok = hd >= a.heading.from && hd <= a.heading.to && (!a.horizon || horizonInFrame);
-    checks.push({ ok, label: a.heading.label, weight: 0.3 });
+    other.push({ ok: hd >= a.heading.from && hd <= a.heading.to && (!a.horizon || horizonInFrame), label: a.heading.label });
+  } else if (a.horizon) {
+    other.push({ ok: horizonInFrame, label: 'Horizont im Bild' });
   }
-  const total = checks.reduce((s, c) => s + c.weight, 0) || 1;
-  const score = checks.reduce((s, c) => s + (c.ok ? c.weight : 0), 0) / total;
+  if (a.hours) other.push({ ok: inHours(ctx.hour, a.hours.from, a.hours.to), label: a.hours.label });
+  if (a.gimbalMax) other.push({ ok: THREE.MathUtils.radToDeg(ctx.gimbal) <= a.gimbalMax.deg, label: a.gimbalMax.label });
+  if (a.altitudeMax) other.push({ ok: ctx.altitude <= a.altitudeMax.m, label: a.altitudeMax.label });
+  if (a.focalMin) other.push({ ok: ctx.focal >= a.focalMin.mm, label: a.focalMin.label });
+
+  // subjects carry 40 %, all other wishes share the rest
+  const subjectShare = other.length ? 0.4 : 1;
+  const score =
+    (subjectChecks.filter((c) => c.ok).length / Math.max(1, subjectChecks.length)) * subjectShare +
+    (other.length ? (other.filter((c) => c.ok).length / other.length) * (1 - subjectShare) : 0);
+  const checks = [...subjectChecks, ...other];
   const missing = checks.filter((c) => !c.ok);
   return {
     key: 'brief',
@@ -307,7 +329,9 @@ function rateTechnique(ctx: RatingContext): Criterion {
   let text = 'Scharf';
   let hint = '';
   if (sharp < 0.85) {
-    text = turn > wind ? 'Verwackelt: die Drohne hat sich beim Auslösen gedreht' : 'Leicht verwackelt durch Wind (Tele verstärkt das)';
+    text = turn > wind
+      ? 'Verwackelt: die Drohne hat sich beim Auslösen gedreht'
+      : `Leicht verwackelt durch Wind${ctx.focal >= 50 ? ' (Tele verstärkt das)' : ''}`;
     hint = 'das Bild ist leider verwackelt';
   }
   return { key: 'technique', label: 'Technik', score: sharp, text, hint };
@@ -367,8 +391,8 @@ function commentFor(stars: number, criteria: Criterion[], a: Assignment | null) 
   }
   if (stars >= 4.5) {
     return weakest && weakest.score < 0.8
-      ? `Sehr schön! Eine Kleinigkeit: ${hint}. Das wird trotzdem unsere nächste Postkarte.`
-      : 'Wunderbar, genau so! Das wird unsere nächste Postkarte.';
+      ? `Sehr schön! Eine Kleinigkeit: ${hint}. Wir nehmen es trotzdem sehr gerne.`
+      : 'Wunderbar, genau so haben wir uns das vorgestellt!';
   }
   if (stars >= 3.5) return hint ? `Schön geworden. Nur: ${hint}. Aber wir nehmen es gerne.` : 'Schön geworden, das nehmen wir gerne.';
   if (stars >= 2.5) return `Brauchbar, aber ${hint || 'mir fehlt noch etwas'}. Versuchen Sie es nochmals?`;

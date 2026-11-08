@@ -52,8 +52,17 @@ export class PhotoCamera {
     this.applyGrid();
   }
 
+  /** Set by the player; null follows the screen. */
+  private forcedPortrait: boolean | null = null;
+
   get portrait() {
-    return window.innerHeight > window.innerWidth;
+    return this.forcedPortrait ?? window.innerHeight > window.innerWidth;
+  }
+
+  /** Switch between landscape and portrait photos, whatever way the screen is held. */
+  toggleOrientation() {
+    this.forcedPortrait = !this.portrait;
+    this.layout();
   }
 
   setActive(on: boolean) {
@@ -120,7 +129,7 @@ export class PhotoCamera {
 
     this.info.textContent =
       `${Math.round(this.focal)} mm · ${(this.focal / MIN_FOCAL).toFixed(1)}× · ` +
-      `Neigung ${Math.round(THREE.MathUtils.radToDeg(this.gimbal))}° · Raster: ${GRID_LABEL[this.grid]}`;
+      `Neigung ${Math.round(THREE.MathUtils.radToDeg(this.gimbal))}° · ${this.portrait ? 'Hoch' : 'Quer'} · Raster: ${GRID_LABEL[this.grid]}`;
   }
 
   /** The frame rectangle in the full-screen camera's NDC. */

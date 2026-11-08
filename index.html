@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>MKPHOTO</title>
   </head>
-  <body data-mode="flight">
+  <body data-mode="flight" data-screen="menu">
     <canvas id="scene"></canvas>
 
     <div id="loading" class="loading">
@@ -18,7 +18,7 @@
     <header class="brand">
       <svg viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
       <span>MKPHOTO</span>
-      <small>M4 · Bewertung</small>
+      <small>M5 · Aufträge</small>
     </header>
     <pre id="stats" class="stats"></pre>
     <p id="credits" class="credits"></p>
@@ -28,6 +28,7 @@
       <b id="brief-title"></b>
       <p id="brief-text"></p>
       <p id="brief-from" class="brief-from"></p>
+      <ul id="brief-list" class="brief-list"></ul>
       <p id="brief-best" class="brief-best"></p>
     </aside>
 
@@ -43,6 +44,8 @@
         <dt>Start</dt><dd id="hud-home">0 m</dd>
         <dt>Modus</dt><dd id="hud-mode">Assist</dd>
         <dt>Zeit</dt><dd id="hud-time">10:00</dd>
+        <dt>Konto</dt><dd id="hud-money">CHF 0</dd>
+        <dt>Ruf</dt><dd id="hud-rep">0</dd>
       </dl>
     </section>
 
@@ -61,18 +64,18 @@
 
     <aside class="help help-keyboard flight-only">
       <b>Tastatur</b> W A S D bewegen · Q E / ← → drehen · Leertaste / Shift steigen, sinken<br />
-      C Kamera · Tab Album · P Assist/Pro · R zum Start · T Tageszeit · G Grafik
+      C Kamera · M Studio · Tab Album · Esc Menü · P Assist/Pro · R zum Start · T Tageszeit
     </aside>
     <aside class="help help-keyboard camera-only">
       <b>Kamera</b> A D / Q E drehen · W S neigen · + / − oder Mausrad zoomen<br />
-      Leertaste auslösen · F Raster · C oder Esc zurück zum Fliegen · Tab Album
+      Leertaste auslösen · V Hoch/Quer · F Raster · C oder Esc zurück zum Fliegen
     </aside>
     <aside class="help help-gamepad flight-only">
       <b>Gamepad</b> Linker Stick bewegen · Rechter Stick drehen, Kamera neigen · RT / LT steigen, sinken<br />
-      LB Kamera · Menü Album · Y Assist/Pro · B zum Start · X Tageszeit · View Grafik
+      LB Kamera · Start Menü · View Album · Y Assist/Pro · B zum Start · X Tageszeit
     </aside>
     <aside class="help help-gamepad camera-only">
-      <b>Kamera</b> Sticks drehen und neigen · RT / LT zoomen · A auslösen · Y Raster · B oder LB zurück
+      <b>Kamera</b> Sticks drehen und neigen · RT / LT zoomen · A auslösen · RB Hoch/Quer · Y Raster · B oder LB zurück
     </aside>
 
     <div id="touch" class="touch">
@@ -84,8 +87,9 @@
         <button id="btn-mode" class="flight-only" type="button">Assist</button>
         <button id="btn-home" class="flight-only" type="button">Start</button>
         <button id="btn-grid" class="camera-only" type="button">Raster</button>
+        <button id="btn-orient" class="camera-only" type="button">Hoch/Quer</button>
         <button id="btn-time" type="button">Zeit</button>
-        <button id="btn-quality" type="button">Grafik</button>
+        <button id="btn-menu" type="button">Menü</button>
       </div>
       <button id="btn-shutter" class="shutter camera-only" type="button" aria-label="Auslösen"></button>
       <p class="rotate-hint">Tipp: Handy quer halten</p>
@@ -105,7 +109,57 @@
           <p id="rating-comment"></p>
           <footer id="rating-from"></footer>
         </blockquote>
-        <button id="rating-close" type="button">Weiter</button>
+        <button id="rating-submit" type="button" hidden>Einreichen</button>
+        <button id="rating-close" class="secondary" type="button">Weiter</button>
+      </div>
+    </section>
+
+    <section id="studio" class="studio" hidden aria-label="Studio">
+      <header class="studio-head">
+        <div>
+          <h2>Studio</h2>
+          <p class="studio-wallet"><b id="studio-money">CHF 0</b> · <span id="studio-level"></span></p>
+          <div class="studio-bar"><i id="studio-progress"></i></div>
+          <p id="studio-next" class="studio-next"></p>
+        </div>
+        <button id="studio-close" type="button">Schliessen</button>
+      </header>
+      <div id="studio-jobs" class="studio-jobs"></div>
+    </section>
+
+    <section id="menu" class="menu" aria-label="Hauptmenü">
+      <div class="menu-card">
+        <svg class="menu-logo" viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
+        <h1>MKPHOTO</h1>
+        <p class="menu-claim">Drohnenfotografie Schweiz</p>
+        <div id="menu-main" class="menu-buttons">
+          <button id="menu-play" type="button" data-action="play">Spiel starten</button>
+          <button id="menu-new" type="button" data-action="newGame" hidden>Neues Spiel</button>
+          <button type="button" data-action="studio">Studio · Aufträge</button>
+          <button type="button" data-action="album">Fotoalbum</button>
+          <button type="button" data-action="options">Optionen</button>
+        </div>
+        <div id="menu-options" class="menu-buttons" hidden>
+          <button id="menu-quality" type="button" data-action="quality">Grafik</button>
+          <button id="menu-mode" type="button" data-action="mode">Steuerung</button>
+          <button type="button" data-action="reset">Spielstand zurücksetzen</button>
+          <button type="button" data-action="back">Zurück</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="intro" class="intro" hidden aria-label="Willkommen">
+      <div class="menu-card">
+        <h2>Willkommen in Luzern</h2>
+        <p>
+          Deine Tante Vreni hat dir ihr Fotostudio in der Altstadt überlassen. Die Kundschaft ist noch da,
+          die Drohne auch, nur ein Bild fehlt: deines.
+        </p>
+        <p>
+          Nimm im Studio einen Auftrag an, flieg zum Motiv und schalte in den Kameramodus. Ab 3 Sternen kannst du
+          das Foto einreichen und wirst bezahlt. Mit mehr Ruf kommen neue Aufträge.
+        </p>
+        <button id="intro-go" type="button">Ins Studio</button>
       </div>
     </section>
 
