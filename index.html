@@ -13,7 +13,7 @@
     <header class="brand">
       <svg viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
       <span>MKPHOTO</span>
-      <small>M1 · Fliegen</small>
+      <small>M2 · Look</small>
     </header>
     <pre id="stats" class="stats"></pre>
 
@@ -28,6 +28,7 @@
         <dt>Wind</dt><dd><span id="wind-arrow" class="wind-arrow">↑</span> <span id="hud-wind">0 m/s</span></dd>
         <dt>Start</dt><dd id="hud-home">0 m</dd>
         <dt>Modus</dt><dd id="hud-mode">Assist</dd>
+        <dt>Zeit</dt><dd id="hud-time">10:00</dd>
       </dl>
     </section>
 
@@ -35,11 +36,11 @@
 
     <aside class="help help-keyboard">
       <b>Tastatur</b> W A S D bewegen · Q E / ← → drehen · Leertaste / Shift steigen, sinken<br />
-      P Assist/Pro · R zum Start · Mausrad Zoom
+      P Assist/Pro · R zum Start · T Tageszeit · G Grafik · Mausrad Zoom
     </aside>
     <aside class="help help-gamepad">
       <b>Gamepad</b> Linker Stick bewegen · Rechter Stick drehen, Kamera neigen · RT / LT steigen, sinken<br />
-      Y Assist/Pro · B zum Start
+      Y Assist/Pro · B zum Start · X Tageszeit · View Grafik
     </aside>
 
     <div id="touch" class="touch">
@@ -48,6 +49,8 @@
       <div class="touch-buttons">
         <button id="btn-mode" type="button">Assist</button>
         <button id="btn-home" type="button">Start</button>
+        <button id="btn-time" type="button">Zeit</button>
+        <button id="btn-quality" type="button">Grafik</button>
       </div>
       <p class="rotate-hint">Tipp: Handy quer halten</p>
     </div>

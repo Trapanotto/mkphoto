@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addHull } from './outline';
 import { toon } from './toon';
 import { FLIGHT_RADIUS, HOME, MAX_ALTITUDE, heightAt, type Collider } from './world';
 
@@ -42,6 +43,7 @@ export class Drone {
 
   constructor() {
     const hull = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 1.2), toon('#f2f2f2'));
+    addHull(hull, 0.03);
     this.group.add(hull);
     const corners: [number, number][] = [
       [1, -1],
@@ -56,6 +58,7 @@ export class Drone {
       // front rotors red, rear grey, so the heading is readable
       const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.04, 16), toon(z < 0 ? '#d23a2a' : '#9a9a9a'));
       rotor.position.set(x * 0.85, 0.2, z * 0.85);
+      addHull(rotor, 0.03);
       this.group.add(arm, rotor);
       this.rotors.push(rotor);
     }

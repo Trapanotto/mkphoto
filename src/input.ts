@@ -11,7 +11,11 @@ export interface InputState {
   /** One-shot actions, true only in the frame they were triggered. */
   toggleMode: boolean;
   home: boolean;
+  skipTime: boolean;
+  cycleQuality: boolean;
 }
+
+export type Action = 'toggleMode' | 'home' | 'skipTime' | 'cycleQuality';
 
 const DEADZONE = 0.15;
 
@@ -24,8 +28,7 @@ export class Input {
   readonly touch: TouchSticks;
 
   private readonly keys = new Set<string>();
-  private pendingToggle = false;
-  private pendingHome = false;
+  private readonly pending = new Set<Action>();
   private padPrev: boolean[] = [];
 
   constructor(touchLayer: HTMLElement) {
@@ -36,8 +39,10 @@ export class Input {
       this.keys.add(e.code);
       this.device = 'keyboard';
       if (e.repeat) return;
-      if (e.code === 'KeyP') this.pendingToggle = true;
-      if (e.code === 'KeyR') this.pendingHome = true;
+      if (e.code === 'KeyP') this.pending.add('toggleMode');
+      if (e.code === 'KeyR') this.pending.add('home');
+      if (e.code === 'KeyT') this.pending.add('skipTime');
+      if (e.code === 'KeyG') this.pending.add('cycleQuality');
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -47,9 +52,8 @@ export class Input {
   }
 
   /** Called by on-screen buttons. */
-  trigger(action: 'toggleMode' | 'home') {
-    if (action === 'toggleMode') this.pendingToggle = true;
-    else this.pendingHome = true;
+  trigger(action: Action) {
+    this.pending.add(action);
   }
 
   read(): InputState {
@@ -60,10 +64,12 @@ export class Input {
       yaw: k('KeyE', 'ArrowRight') - k('KeyQ', 'ArrowLeft'),
       lift: k('Space', 'ArrowUp') - k('ShiftLeft', 'ShiftRight', 'ArrowDown'),
       camPitch: 0,
-      toggleMode: this.pendingToggle,
-      home: this.pendingHome,
+      toggleMode: this.pending.has('toggleMode'),
+      home: this.pending.has('home'),
+      skipTime: this.pending.has('skipTime'),
+      cycleQuality: this.pending.has('cycleQuality'),
     };
-    this.pendingToggle = this.pendingHome = false;
+    this.pending.clear();
 
     this.readGamepad(s);
 
@@ -88,10 +94,13 @@ export class Input {
     s.lift += lift;
     s.camPitch = -ry;
 
-    // edge-triggered buttons: Y (3) switches mode, B (1) flies home
+    // edge-triggered buttons: Y (3) mode, B (1) home, X (2) time, View/Back (8) graphics
     const pressed = pad.buttons.map((b) => b.pressed);
-    if (pressed[3] && !this.padPrev[3]) s.toggleMode = true;
-    if (pressed[1] && !this.padPrev[1]) s.home = true;
+    const down = (i: number) => pressed[i] && !this.padPrev[i];
+    if (down(3)) s.toggleMode = true;
+    if (down(1)) s.home = true;
+    if (down(2)) s.skipTime = true;
+    if (down(8)) s.cycleQuality = true;
     if (pressed.some((p, i) => p && !this.padPrev[i])) this.device = 'gamepad';
     this.padPrev = pressed;
   }

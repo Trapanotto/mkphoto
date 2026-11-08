@@ -15,14 +15,16 @@ export class Hud {
   private readonly windText = $('hud-wind');
   private readonly home = $('hud-home');
   private readonly mode = $('hud-mode');
+  private readonly time = $('hud-time');
   private readonly modeButton = $('btn-mode');
   private readonly message = $('message');
   private readonly dir = new THREE.Vector3();
   private last = 0;
 
-  update(now: number, drone: Drone, wind: THREE.Vector3, camera: THREE.Camera, device: Device) {
+  update(now: number, drone: Drone, wind: THREE.Vector3, camera: THREE.Camera, device: Device, time: string) {
     if (now - this.last < 100) return;
     this.last = now;
+    this.time.textContent = time;
 
     const b = Math.ceil(drone.battery);
     this.batteryFill.style.width = `${drone.battery}%`;
