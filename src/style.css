@@ -298,14 +298,341 @@ body[data-device='gamepad'] .help-gamepad {
   }
 
   .touch-buttons {
-    top: auto;
-    bottom: max(12px, env(safe-area-inset-bottom));
+    top: max(10px, env(safe-area-inset-top));
     right: 50%;
     transform: translateX(50%);
     flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    width: max-content;
+    max-width: calc(100vw - 400px);
+  }
+
+  .touch-buttons button {
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 12px;
   }
 
   .rotate-hint {
     display: none;
   }
+}
+
+/* --- Mode-dependent visibility -------------------------------------------- */
+
+body[data-mode='flight'] .camera-only,
+body[data-mode='camera'] .flight-only {
+  display: none !important;
+}
+
+/* --- Loading & credits ------------------------------------------------------- */
+
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: #0b0b0b;
+}
+
+.loading[hidden] {
+  display: none;
+}
+
+.loading svg {
+  width: 96px;
+  height: 96px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.credits {
+  position: fixed;
+  left: 50%;
+  bottom: max(4px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 10px;
+  opacity: 0.75;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* --- Viewfinder ---------------------------------------------------------------- */
+
+.viewfinder {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.viewfinder[hidden] {
+  display: none;
+}
+
+.vf-frame {
+  position: absolute;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  /* darken everything outside the photo */
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+}
+
+.vf-frame .g {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.55);
+  display: none;
+}
+
+.vf-frame .v1,
+.vf-frame .v2 {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.vf-frame .h1,
+.vf-frame .h2 {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.vf-frame[data-grid='thirds'] .g,
+.vf-frame[data-grid='golden'] .g {
+  display: block;
+}
+
+.vf-frame[data-grid='thirds'] .v1 { left: 33.333%; }
+.vf-frame[data-grid='thirds'] .v2 { left: 66.667%; }
+.vf-frame[data-grid='thirds'] .h1 { top: 33.333%; }
+.vf-frame[data-grid='thirds'] .h2 { top: 66.667%; }
+.vf-frame[data-grid='golden'] .v1 { left: 38.2%; }
+.vf-frame[data-grid='golden'] .v2 { left: 61.8%; }
+.vf-frame[data-grid='golden'] .h1 { top: 38.2%; }
+.vf-frame[data-grid='golden'] .h2 { top: 61.8%; }
+
+.vf-frame[data-grid='horizon'] .h1 {
+  display: block;
+  top: 50%;
+}
+
+.vf-frame .cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  background:
+    linear-gradient(#fff, #fff) center / 18px 1.5px no-repeat,
+    linear-gradient(#fff, #fff) center / 1.5px 18px no-repeat;
+  opacity: 0.8;
+}
+
+.vf-info {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+}
+
+.vf-flash.go {
+  animation: flash 0.35s ease-out;
+}
+
+@keyframes flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* in camera mode the HUD gets out of the way of the frame */
+body[data-mode='camera'] .hud {
+  opacity: 0.8;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.75);
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+/* --- Shutter button (touch) --------------------------------------------- */
+
+.shutter {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.shutter:active {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* --- Album ---------------------------------------------------------------------- */
+
+.album {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px
+    max(16px, env(safe-area-inset-left));
+  background: #111;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+}
+
+.album[hidden] {
+  display: none;
+}
+
+.album-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.album-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.album button,
+.lightbox button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #2a2a2a;
+  color: #fff;
+  font: 700 14px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.album-empty {
+  opacity: 0.7;
+}
+
+.album-empty[hidden] {
+  display: none;
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.album-grid .album-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  text-align: left;
+  background: #1d1d1d;
+}
+
+.album-item img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #000;
+}
+
+.album-item span {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.94);
+}
+
+.lightbox[hidden] {
+  display: none;
+}
+
+.lightbox img {
+  max-width: 100%;
+  max-height: calc(100% - 150px);
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.lightbox-meta {
+  margin: 0;
+  font: 12px/1.5 system-ui, sans-serif;
+  text-align: center;
+  white-space: pre-wrap;
+  opacity: 0.85;
+}
+
+.lightbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lightbox-actions button[hidden] {
+  display: none;
 }

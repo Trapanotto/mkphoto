@@ -1,0 +1,20 @@
+{
+  "origin": {
+    "e": 2666010,
+    "n": 1211541
+  },
+  "lakeLevel": 433.6,
+  "core": {
+    "size": 1600,
+    "step": 5,
+    "count": 321
+  },
+  "far": {
+    "size": 24000,
+    "step": 200,
+    "count": 121
+  },
+  "heightUnit": "dm above lake level, Int16, rows north to south",
+  "attribution": "© swisstopo (swissALTI3D, swissSURFACE3D, VECTOR25)",
+  "created": "2026-11-08"
+}

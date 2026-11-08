@@ -156,7 +156,9 @@ export class OutlineRenderer {
   setSize(width: number, height: number) {
     this.colorTarget.setSize(width, height);
     this.normalTarget.setSize(width, height);
-    this.material.uniforms.texel.value.set(1 / width, 1 / height);
+    // keep lines about as thick as on a ~800 px tall screen, e.g. in 1800 px photos
+    const scale = Math.max(1, Math.round(Math.min(width, height) / 800));
+    this.material.uniforms.texel.value.set(scale / width, scale / height);
   }
 
   render(scene: THREE.Scene, camera: THREE.PerspectiveCamera) {

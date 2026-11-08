@@ -13,9 +13,41 @@ export interface InputState {
   home: boolean;
   skipTime: boolean;
   cycleQuality: boolean;
+  toggleCamera: boolean;
+  shoot: boolean;
+  cycleGrid: boolean;
+  album: boolean;
+  back: boolean;
+  /** Photo camera axes: turn, tilt the gimbal, zoom. */
+  camYaw: number;
+  camTilt: number;
+  camZoom: number;
 }
 
-export type Action = 'toggleMode' | 'home' | 'skipTime' | 'cycleQuality';
+export type Action =
+  | 'toggleMode'
+  | 'home'
+  | 'skipTime'
+  | 'cycleQuality'
+  | 'toggleCamera'
+  | 'shoot'
+  | 'cycleGrid'
+  | 'album'
+  | 'back';
+
+const KEY_ACTIONS: Record<string, Action> = {
+  KeyP: 'toggleMode',
+  KeyR: 'home',
+  KeyT: 'skipTime',
+  KeyG: 'cycleQuality',
+  KeyC: 'toggleCamera',
+  Space: 'shoot',
+  Enter: 'shoot',
+  NumpadEnter: 'shoot',
+  KeyF: 'cycleGrid',
+  Tab: 'album',
+  Escape: 'back',
+};
 
 const DEADZONE = 0.15;
 
@@ -35,14 +67,12 @@ export class Input {
     this.device = window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'keyboard';
 
     window.addEventListener('keydown', (e) => {
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
       this.device = 'keyboard';
       if (e.repeat) return;
-      if (e.code === 'KeyP') this.pending.add('toggleMode');
-      if (e.code === 'KeyR') this.pending.add('home');
-      if (e.code === 'KeyT') this.pending.add('skipTime');
-      if (e.code === 'KeyG') this.pending.add('cycleQuality');
+      const action = KEY_ACTIONS[e.code];
+      if (action) this.pending.add(action);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -68,6 +98,14 @@ export class Input {
       home: this.pending.has('home'),
       skipTime: this.pending.has('skipTime'),
       cycleQuality: this.pending.has('cycleQuality'),
+      toggleCamera: this.pending.has('toggleCamera'),
+      shoot: this.pending.has('shoot'),
+      cycleGrid: this.pending.has('cycleGrid'),
+      album: this.pending.has('album'),
+      back: this.pending.has('back'),
+      camYaw: k('KeyD', 'KeyE', 'ArrowRight') - k('KeyA', 'KeyQ', 'ArrowLeft'),
+      camTilt: k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown'),
+      camZoom: k('Equal', 'NumpadAdd', 'BracketRight') - k('Minus', 'NumpadSubtract', 'Slash'),
     };
     this.pending.clear();
 
@@ -77,6 +115,10 @@ export class Input {
     s.moveY = clamp(s.moveY + this.touch.left.y);
     s.yaw = clamp(s.yaw + this.touch.right.x);
     s.lift = clamp(s.lift + this.touch.right.y);
+    // in the photo camera: right thumb turns and tilts, left thumb zooms
+    s.camYaw = clamp(s.camYaw + this.touch.right.x);
+    s.camTilt = clamp(s.camTilt + this.touch.right.y);
+    s.camZoom = clamp(s.camZoom + this.touch.left.y);
     return s;
   }
 
@@ -93,14 +135,21 @@ export class Input {
     s.yaw += rx;
     s.lift += lift;
     s.camPitch = -ry;
+    s.camYaw += rx + lx;
+    s.camTilt -= ry;
+    s.camZoom += lift;
 
-    // edge-triggered buttons: Y (3) mode, B (1) home, X (2) time, View/Back (8) graphics
+    // edge-triggered buttons: A (0) shoot, B (1) home/back, X (2) time, Y (3) mode or grid,
+    // LB (4) camera, View/Back (8) graphics, Start/Menu (9) album
     const pressed = pad.buttons.map((b) => b.pressed);
     const down = (i: number) => pressed[i] && !this.padPrev[i];
-    if (down(3)) s.toggleMode = true;
-    if (down(1)) s.home = true;
+    if (down(0)) s.shoot = true;
+    if (down(1)) s.home = s.back = true;
     if (down(2)) s.skipTime = true;
+    if (down(3)) s.toggleMode = s.cycleGrid = true;
+    if (down(4)) s.toggleCamera = true;
     if (down(8)) s.cycleQuality = true;
+    if (down(9)) s.album = true;
     if (pressed.some((p, i) => p && !this.padPrev[i])) this.device = 'gamepad';
     this.padPrev = pressed;
   }

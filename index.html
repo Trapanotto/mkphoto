@@ -7,15 +7,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>MKPHOTO</title>
   </head>
-  <body>
+  <body data-mode="flight">
     <canvas id="scene"></canvas>
+
+    <div id="loading" class="loading">
+      <svg viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
+      <p id="loading-text">Luzern wird geladen …</p>
+    </div>
 
     <header class="brand">
       <svg viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
       <span>MKPHOTO</span>
-      <small>M2 · Look</small>
+      <small>M3 · Erstes Motiv</small>
     </header>
     <pre id="stats" class="stats"></pre>
+    <p id="credits" class="credits"></p>
 
     <section class="hud" aria-label="Fluganzeige">
       <div class="battery">
@@ -32,28 +38,68 @@
       </dl>
     </section>
 
-    <div id="message" class="message" role="status" hidden></div>
+    <div id="viewfinder" class="viewfinder" hidden>
+      <div id="vf-frame" class="vf-frame" data-grid="thirds">
+        <i class="g v1"></i><i class="g v2"></i><i class="g h1"></i><i class="g h2"></i>
+        <i class="cross"></i>
+        <p id="vf-info" class="vf-info"></p>
+      </div>
+      <div id="vf-flash" class="vf-flash"></div>
+    </div>
 
-    <aside class="help help-keyboard">
+    <div id="message" class="message" role="status" hidden></div>
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <aside class="help help-keyboard flight-only">
       <b>Tastatur</b> W A S D bewegen · Q E / ← → drehen · Leertaste / Shift steigen, sinken<br />
-      P Assist/Pro · R zum Start · T Tageszeit · G Grafik · Mausrad Zoom
+      C Kamera · Tab Album · P Assist/Pro · R zum Start · T Tageszeit · G Grafik
     </aside>
-    <aside class="help help-gamepad">
+    <aside class="help help-keyboard camera-only">
+      <b>Kamera</b> A D / Q E drehen · W S neigen · + / − oder Mausrad zoomen<br />
+      Leertaste auslösen · F Raster · C oder Esc zurück zum Fliegen · Tab Album
+    </aside>
+    <aside class="help help-gamepad flight-only">
       <b>Gamepad</b> Linker Stick bewegen · Rechter Stick drehen, Kamera neigen · RT / LT steigen, sinken<br />
-      Y Assist/Pro · B zum Start · X Tageszeit · View Grafik
+      LB Kamera · Menü Album · Y Assist/Pro · B zum Start · X Tageszeit · View Grafik
+    </aside>
+    <aside class="help help-gamepad camera-only">
+      <b>Kamera</b> Sticks drehen und neigen · RT / LT zoomen · A auslösen · Y Raster · B oder LB zurück
     </aside>
 
     <div id="touch" class="touch">
       <div class="stick left"><div class="knob"></div><span>Bewegen</span></div>
       <div class="stick right"><div class="knob"></div><span>Drehen · Höhe</span></div>
       <div class="touch-buttons">
-        <button id="btn-mode" type="button">Assist</button>
-        <button id="btn-home" type="button">Start</button>
+        <button id="btn-camera" type="button">Kamera</button>
+        <button id="btn-album" type="button">Album</button>
+        <button id="btn-mode" class="flight-only" type="button">Assist</button>
+        <button id="btn-home" class="flight-only" type="button">Start</button>
+        <button id="btn-grid" class="camera-only" type="button">Raster</button>
         <button id="btn-time" type="button">Zeit</button>
         <button id="btn-quality" type="button">Grafik</button>
       </div>
+      <button id="btn-shutter" class="shutter camera-only" type="button" aria-label="Auslösen"></button>
       <p class="rotate-hint">Tipp: Handy quer halten</p>
     </div>
+
+    <section id="album" class="album" hidden aria-label="Album">
+      <header class="album-head">
+        <h2>Album</h2>
+        <button id="album-close" type="button">Schliessen</button>
+      </header>
+      <p id="album-empty" class="album-empty">Noch keine Fotos. Mit C (oder der Taste „Kamera“) in den Kameramodus wechseln und auslösen.</p>
+      <div id="album-grid" class="album-grid"></div>
+      <div id="lightbox" class="lightbox" hidden>
+        <img id="lightbox-img" alt="" />
+        <pre id="lightbox-meta" class="lightbox-meta"></pre>
+        <div class="lightbox-actions">
+          <button id="lightbox-download" type="button">Herunterladen</button>
+          <button id="lightbox-share" type="button">Teilen</button>
+          <button id="lightbox-delete" type="button">Löschen</button>
+          <button id="lightbox-close" type="button">Zurück</button>
+        </div>
+      </div>
+    </section>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

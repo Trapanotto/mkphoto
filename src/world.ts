@@ -1,33 +1,26 @@
 import * as THREE from 'three';
+import { createLandmarks, type Landmark } from './landmarks';
+import { ObstacleIndex, Prism } from './obstacles';
 import { addHull } from './outline';
+import { heightAt, terrainAt, WATER_EPS, type Grid, type TerrainData } from './terrain';
 import { toon } from './toon';
 
-/** Upright obstacle the drone can bump into. Cones narrow towards the top. */
-export interface Collider {
-  kind: 'cylinder' | 'cone';
-  x: number;
-  z: number;
-  r: number;
-  h: number;
-  base: number;
-}
+export { heightAt };
 
-export const HOME = new THREE.Vector3(0, 0, 28.5);
-export const FLIGHT_RADIUS = 185;
+/** Start pad on the quay south of the bridge, between river and Bahnhofstrasse. */
+export const HOME = new THREE.Vector3(24, 0, 79);
+/** Heading at the start: looking at the bridge. */
+export const HOME_YAW = Math.atan2(24, 79);
+export const FLIGHT_RADIUS = 650;
 export const MAX_ALTITUDE = 120;
 
-/** Terrain height in metres. Flat around the lake, hills further out. */
-export function heightAt(x: number, z: number): number {
-  const d = Math.hypot(x, z);
-  if (d <= 30) return 0;
-  const hills = Math.sin(x * 0.05) * Math.cos(z * 0.04) * 4 + Math.sin(x * 0.013 + z * 0.02) * 6;
-  return Math.max(0, (d - 30) * 0.06 * (hills + 6));
-}
-
 export interface World {
-  colliders: Collider[];
+  obstacles: ObstacleIndex;
+  landmarks: Landmark[];
   lake: THREE.MeshToonMaterial;
   windows: THREE.MeshBasicMaterial;
+  /** Highest surface under a point at height y: terrain, water or a roof below it. */
+  groundAt(x: number, z: number, y: number): number;
   update(dt: number, wind: THREE.Vector3): void;
 }
 
@@ -41,175 +34,137 @@ function random(seed: number) {
   };
 }
 
+const PAVED = new THREE.Color('#bdb9b0');
 const GRASS = new THREE.Color('#86c06c');
 const MEADOW = new THREE.Color('#6aa85a');
+const FOREST = new THREE.Color('#3f7a45');
 const ROCK = new THREE.Color('#9a9488');
 const SNOW = new THREE.Color('#f4f6fa');
+const SHORE = new THREE.Color('#b9b2a0');
 
-export function createWorld(scene: THREE.Scene): World {
-  const colliders: Collider[] = [];
+/** Terrain mesh from a height grid. Water cells are pushed below the water plane. */
+function terrainMesh(grid: Grid, colorAt: (h: number, steep: number, x: number, z: number) => THREE.Color, hole?: number) {
+  const segments = grid.count - 1;
+  const geo = new THREE.PlaneGeometry(grid.size, grid.size, segments, segments);
+  geo.rotateX(-Math.PI / 2); // rows run north to south, like the grid
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    let h = grid.heights[i];
+    if (h <= WATER_EPS) h = -1.5;
+    // far mesh: sink the part the detailed core covers
+    if (hole && Math.abs(pos.getX(i)) < hole && Math.abs(pos.getZ(i)) < hole) h -= 25;
+    pos.setY(i, h);
+  }
+  geo.computeVertexNormals();
+  const normals = geo.attributes.normal;
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    colorAt(grid.heights[i], 1 - normals.getY(i), pos.getX(i), pos.getZ(i)).toArray(colors, i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = toon('#ffffff');
+  mat.vertexColors = true;
+  return new THREE.Mesh(geo, mat);
+}
+
+/** Extrudes all building footprints into one mesh with flat roofs. */
+function buildingsMesh(data: TerrainData['buildings'], obstacles: ObstacleIndex) {
+  const rand = random(7);
+  const walls = ['#f2e6d0', '#e8d2b0', '#ffffff', '#f0d9c4', '#e6c9a8', '#d9d2c4'];
+  const roofs = ['#9a4a32', '#8a3a2a', '#a65a3a', '#7a4030'];
+  const modernWall = '#cfd6dc';
+  const modernRoof = '#7c8288';
+  const positions: number[] = [];
+  const colors: number[] = [];
+
+  const push = (x: number, y: number, z: number, color: THREE.Color) => {
+    positions.push(x, y, z);
+    colors.push(color.r, color.g, color.b);
+  };
+
+  for (const b of data) {
+    const ring = b.ring;
+    if (ring.length < 3) continue;
+    const bottom = b.base - 2;
+    const top = b.base + b.height;
+    const modern = b.height > 24;
+    const wall = new THREE.Color(modern ? modernWall : walls[Math.floor(rand() * walls.length)]);
+    const roof = new THREE.Color(modern ? modernRoof : roofs[Math.floor(rand() * roofs.length)]);
+
+    // winding: make the ring counter-clockwise seen from above (x right, z down → clockwise in x/z)
+    let area = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) area += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]);
+    const pts = area > 0 ? ring : [...ring].reverse();
+
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, z1] = pts[i];
+      const [x2, z2] = pts[(i + 1) % pts.length];
+      push(x1, bottom, z1, wall);
+      push(x2, bottom, z2, wall);
+      push(x2, top, z2, wall);
+      push(x1, bottom, z1, wall);
+      push(x2, top, z2, wall);
+      push(x1, top, z1, wall);
+    }
+    const shape = pts.map(([x, z]) => new THREE.Vector2(x, z));
+    const tris = THREE.ShapeUtils.triangulateShape(shape, []);
+    for (const tri of tris) {
+      const [a, b2, c2] = tri.map((k) => pts[k]);
+      // keep the roof facing up whatever winding the triangulation returns
+      const up = (b2[0] - a[0]) * (c2[1] - a[1]) - (b2[1] - a[1]) * (c2[0] - a[0]) < 0;
+      for (const p of up ? [a, b2, c2] : [a, c2, b2]) push(p[0], top, p[1], roof);
+    }
+    obstacles.add(new Prism(ring, bottom, top));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const mat = toon('#ffffff');
+  mat.vertexColors = true;
+  const mesh = new THREE.Mesh(geo, mat);
+  addHull(mesh, 0.15);
+  return mesh;
+}
+
+export function createWorld(scene: THREE.Scene, data: TerrainData): World {
+  const obstacles = new ObstacleIndex();
   const rand = random(42);
 
-  // --- Terrain, coloured by height and slope in hard bands --------------------
-  const ground = new THREE.PlaneGeometry(400, 400, 128, 128);
-  ground.rotateX(-Math.PI / 2);
-  const pos = ground.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
-  ground.computeVertexNormals();
-  const normals = ground.attributes.normal;
-  const colors = new Float32Array(pos.count * 3);
+  // --- Terrain: detailed core + coarse far ring for the horizon ---------------
   const c = new THREE.Color();
-  for (let i = 0; i < pos.count; i++) {
-    const h = pos.getY(i);
-    const steep = normals.getY(i) < 0.72;
-    const patch = Math.sin(pos.getX(i) * 0.09) * Math.sin(pos.getZ(i) * 0.07) > 0.25;
-    if (h > 95) c.copy(SNOW);
-    else if (h > 55 || (steep && h > 12)) c.copy(ROCK);
-    else c.copy(patch ? MEADOW : GRASS);
-    c.toArray(colors, i * 3);
-  }
-  ground.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const groundMat = toon('#ffffff');
-  groundMat.vertexColors = true;
-  scene.add(new THREE.Mesh(ground, groundMat));
+  const core = terrainMesh(data.core, (h, steep, x, z) => {
+    if (h <= WATER_EPS) return c.copy(SHORE);
+    if (h < 9 && steep < 0.25) return c.copy(PAVED);
+    if (steep > 0.35) return c.copy(FOREST);
+    return c.copy(Math.sin(x * 0.07) * Math.sin(z * 0.05) > 0.3 ? MEADOW : GRASS);
+  });
+  const far = terrainMesh(
+    data.far,
+    (h, steep) => {
+      if (h > 1500) return c.copy(SNOW);
+      if (h > 1100 || steep > 0.55) return c.copy(ROCK);
+      if (h > 350 || steep > 0.25) return c.copy(FOREST);
+      return c.copy(MEADOW);
+    },
+    data.core.size / 2,
+  );
+  scene.add(core, far);
 
-  // --- Lake with a foam line along the shore -------------------------------------
-  const lakeMat = toon('#3d8fd1');
-  const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 64), lakeMat);
-  lake.rotation.x = -Math.PI / 2;
-  lake.position.y = 0.05;
-  const foam = new THREE.Mesh(new THREE.RingGeometry(25.3, 26, 64), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-  foam.rotation.x = -Math.PI / 2;
-  foam.position.y = 0.07;
-  scene.add(lake, foam);
+  // --- Water: one plane at lake level ---------------------------------------------
+  const lake = toon('#3d8fd1');
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(data.far.size, data.far.size), lake);
+  water.rotation.x = -Math.PI / 2;
+  scene.add(water);
 
-  // --- Mountains with snow caps ----------------------------------------------------
-  const mountains: [number, number, number, number][] = [
-    [-90, -120, 34, 70],
-    [-30, -150, 40, 90],
-    [40, -130, 30, 64],
-    [110, -100, 36, 76],
-  ];
-  for (const [x, z, r, h] of mountains) {
-    const base = heightAt(x, z) - 2;
-    const rock = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), toon('#8a94a6'));
-    rock.position.set(x, base + h / 2, z);
-    const snow = new THREE.Mesh(new THREE.ConeGeometry(r * 0.38, h * 0.38, 6), toon('#ffffff'));
-    snow.position.set(x, base + h - h * 0.19 + 0.1, z);
-    addHull(rock, 0.9);
-    scene.add(rock, snow);
-    colliders.push({ kind: 'cone', x, z, r, h, base });
-  }
-
-  // --- Windows glow at night: one shared material --------------------------------
+  // --- Buildings and landmarks -----------------------------------------------------
+  scene.add(buildingsMesh(data.buildings, obstacles));
   const windows = new THREE.MeshBasicMaterial({ color: '#3a2a22' });
-  const windowGeo = new THREE.PlaneGeometry(0.7, 0.8);
-
-  // --- Tower in the lake --------------------------------------------------------------
-  const tower = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 8, 8), toon('#c9a77c'));
-  body.position.y = 4;
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.1, 3, 8), toon('#b2442f'));
-  roof.position.y = 9.5;
-  addHull(body, 0.08);
-  addHull(roof, 0.08);
-  tower.add(body, roof);
-  for (const [y, a] of [
-    [5, 0.4],
-    [6.6, 2.6],
-    [3.4, 4.3],
-  ]) {
-    const w = new THREE.Mesh(windowGeo, windows);
-    w.position.set(Math.sin(a) * 1.72, y, Math.cos(a) * 1.72);
-    w.rotation.y = a;
-    tower.add(w);
-  }
-  tower.position.set(-8, 0, -6);
-  scene.add(tower);
-  colliders.push({ kind: 'cylinder', x: -8, z: -6, r: 2.1, h: 11, base: 0 });
-
-  // --- A few houses on the shore, facing the lake ---------------------------------
-  const wallColors = ['#f2e6d0', '#e8d2b0', '#ffffff', '#d9c2a0'];
-  const roofColors = ['#8a3a2a', '#5a3a2a', '#a04a32'];
-  const houseSpots: [number, number][] = [
-    [2.0, 35],
-    [2.35, 38],
-    [2.7, 34],
-    [3.7, 36],
-    [4.05, 40],
-    [0.75, 37],
-    [1.1, 34],
-  ];
-  for (const [angle, radius] of houseSpots) {
-    const x = Math.cos(angle) * radius;
-    const z = Math.sin(angle) * radius;
-    const g = heightAt(x, z);
-    const house = new THREE.Group();
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 5), toon(wallColors[Math.floor(rand() * wallColors.length)]));
-    walls.position.y = 0.5; // 2 m sunk into the slope
-    const roofMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.5, 2.5, 5.8, 3),
-      toon(roofColors[Math.floor(rand() * roofColors.length)]),
-    );
-    roofMesh.rotation.x = -Math.PI / 2;
-    roofMesh.scale.z = 0.55;
-    roofMesh.position.y = 3 + 0.69;
-    addHull(walls, 0.06);
-    addHull(roofMesh, 0.06);
-    house.add(walls, roofMesh);
-    for (const [wx, wy] of [
-      [-0.9, 1.6],
-      [0.9, 1.6],
-      [-0.9, 0.1],
-      [0.9, 0.1],
-    ]) {
-      const w = new THREE.Mesh(windowGeo, windows);
-      w.position.set(wx, wy, 2.51);
-      house.add(w);
-    }
-    house.position.set(x, g, z);
-    house.rotation.y = Math.atan2(-x, -z);
-    scene.add(house);
-    colliders.push({ kind: 'cylinder', x, z, r: 3.2, h: 7, base: g - 2 });
-  }
-
-  // --- Conifers, two instanced meshes ------------------------------------------------
-  const TREES = 420;
-  const crownGeo = new THREE.ConeGeometry(1.5, 4.5, 6);
-  crownGeo.translate(0, 2.25 + 1, 0);
-  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.3, 1.2, 5);
-  trunkGeo.translate(0, 0.6, 0);
-  const crowns = new THREE.InstancedMesh(crownGeo, toon('#2f6b3a'), TREES);
-  const trunks = new THREE.InstancedMesh(trunkGeo, toon('#6a4a32'), TREES);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const s = new THREE.Vector3();
-  const p = new THREE.Vector3();
-  let placed = 0;
-  for (let tries = 0; placed < TREES && tries < TREES * 6; tries++) {
-    const a = rand() * Math.PI * 2;
-    const d = 36 + rand() * 140;
-    const x = Math.cos(a) * d;
-    const z = Math.sin(a) * d;
-    const g = heightAt(x, z);
-    if (g > 55) continue; // tree line
-    if (Math.hypot(x - HOME.x, z - HOME.z) < 10) continue;
-    if (houseSpots.some(([ha, hr]) => Math.hypot(x - Math.cos(ha) * hr, z - Math.sin(ha) * hr) < 6)) continue;
-    const scale = 0.8 + rand() * 0.9;
-    q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rand() * Math.PI);
-    m.compose(p.set(x, g - 0.2, z), q, s.setScalar(scale));
-    crowns.setMatrixAt(placed, m);
-    trunks.setMatrixAt(placed, m);
-    colliders.push({ kind: 'cone', x, z, r: 1.5 * scale, h: 5.5 * scale, base: g });
-    placed++;
-  }
-  crowns.count = trunks.count = placed;
-  crowns.computeBoundingSphere();
-  trunks.computeBoundingSphere();
-  addHull(crowns, 0.12);
-  scene.add(crowns, trunks);
+  const landmarks = createLandmarks(scene, obstacles, windows);
 
   // --- Home pad with an "H" ------------------------------------------------------------
+  HOME.y = heightAt(HOME.x, HOME.z);
   const pad = new THREE.Group();
   const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.1, 32), toon('#2b2b2b'));
   const markMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
@@ -220,56 +175,64 @@ export function createWorld(scene: THREE.Scene): World {
   const barM = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.18), markMat);
   barM.position.y = 0.06;
   pad.add(disc, barL, barR, barM);
-  pad.position.set(HOME.x, heightAt(HOME.x, HOME.z) + 0.05, HOME.z);
+  pad.position.set(HOME.x, HOME.y + 0.05, HOME.z);
+  pad.rotation.y = HOME_YAW;
   scene.add(pad);
 
   // --- Windsock next to the pad ----------------------------------------------------------
+  const sockX = HOME.x + 3;
+  const sockY = heightAt(sockX, HOME.z);
   const sockPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 6), toon('#dddddd'));
-  sockPole.position.set(HOME.x + 3, 1.5, HOME.z);
+  sockPole.position.set(sockX, sockY + 1.5, HOME.z);
   const sock = new THREE.Group();
   const sockCone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.4, 12, 1, true), toon('#ff6a1a'));
   sockCone.material.side = THREE.DoubleSide;
   sockCone.rotation.z = Math.PI / 2; // tip points along +x
   sockCone.position.x = 0.7;
   sock.add(sockCone);
-  sock.position.set(HOME.x + 3, 2.9, HOME.z);
+  sock.position.set(sockX, sockY + 2.9, HOME.z);
   scene.add(sockPole, sock);
 
   // --- Clouds: flattened puffs drifting with the wind -------------------------------------
   const puffGeo = new THREE.IcosahedronGeometry(1, 1);
   const cloudMat = toon('#ffffff');
+  // clouds are mostly seen from below: lift the shadow side so they stay light
+  cloudMat.emissive.set('#5c6270');
   const clouds: THREE.Group[] = [];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 16; i++) {
     const cloud = new THREE.Group();
-    const puffs = 3 + Math.floor(rand() * 3);
+    const puffs = 3 + Math.floor(rand() * 4);
     for (let j = 0; j < puffs; j++) {
       const puff = new THREE.Mesh(puffGeo, cloudMat);
-      const r = 5 + rand() * 5;
-      puff.scale.set(r, r * 0.6, r);
-      puff.position.set((j - puffs / 2) * 6 + rand() * 3, rand() * 2, rand() * 6 - 3);
-      addHull(puff, 0.05);
+      const r = 10 + rand() * 12;
+      puff.scale.set(r, r * 0.55, r);
+      puff.position.set((j - puffs / 2) * 14 + rand() * 6, rand() * 4, rand() * 12 - 6);
+      addHull(puff, 0.04);
       cloud.add(puff);
     }
     const a = rand() * Math.PI * 2;
-    const d = rand() * 210;
-    cloud.position.set(Math.cos(a) * d, 85 + rand() * 40, Math.sin(a) * d);
+    const d = rand() * 900;
+    cloud.position.set(Math.cos(a) * d, 180 + rand() * 120, Math.sin(a) * d);
     scene.add(cloud);
     clouds.push(cloud);
   }
 
   return {
-    colliders,
-    lake: lakeMat,
+    obstacles,
+    landmarks,
+    lake,
     windows,
+    groundAt(x, z, y) {
+      return obstacles.groundAt(x, z, y, heightAt(x, z));
+    },
     update(dt, wind) {
-      // windsock points downwind; hangs limp at calm, horizontal at ~8 m/s
       const strength = Math.hypot(wind.x, wind.z);
+      // windsock points downwind; hangs limp at calm, horizontal at ~8 m/s
       sock.rotation.set(0, Math.atan2(-wind.z, wind.x), -Math.max(0, 1 - strength / 8) * 1.2);
       for (const cloud of clouds) {
-        cloud.position.x += wind.x * 0.4 * dt;
-        cloud.position.z += wind.z * 0.4 * dt;
-        // wrap to the other side of the map
-        if (Math.hypot(cloud.position.x, cloud.position.z) > 240) {
+        cloud.position.x += wind.x * 0.6 * dt;
+        cloud.position.z += wind.z * 0.6 * dt;
+        if (Math.hypot(cloud.position.x, cloud.position.z) > 1000) {
           cloud.position.x *= -0.95;
           cloud.position.z *= -0.95;
         }
@@ -277,3 +240,5 @@ export function createWorld(scene: THREE.Scene): World {
     },
   };
 }
+
+export { terrainAt };

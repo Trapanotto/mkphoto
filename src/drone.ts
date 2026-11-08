@@ -1,7 +1,14 @@
 import * as THREE from 'three';
 import { addHull } from './outline';
 import { toon } from './toon';
-import { FLIGHT_RADIUS, HOME, MAX_ALTITUDE, heightAt, type Collider } from './world';
+import type { ObstacleIndex } from './obstacles';
+import { FLIGHT_RADIUS, HOME, HOME_YAW, MAX_ALTITUDE, heightAt } from './world';
+
+/** What the flight model needs to know about the world. */
+export interface FlightWorld {
+  obstacles: ObstacleIndex;
+  groundAt(x: number, z: number, y: number): number;
+}
 
 export type FlightMode = 'assist' | 'pro';
 
@@ -76,6 +83,7 @@ export class Drone {
     return this.battery <= 0;
   }
 
+  /** Height above the terrain or water below (not above roofs). */
   get altitude() {
     return this.pos.y - REST - heightAt(this.pos.x, this.pos.z);
   }
@@ -85,13 +93,13 @@ export class Drone {
     this.pos.set(HOME.x, heightAt(HOME.x, HOME.z) + REST, HOME.z);
     this.vel.set(0, 0, 0);
     this.groundVel.set(0, 0, 0);
-    this.yaw = 0;
+    this.yaw = HOME_YAW;
     this.battery = 100;
     this.grounded = true;
     this.syncModel();
   }
 
-  update(dt: number, input: FlightInput, wind: THREE.Vector3, colliders: Collider[]) {
+  update(dt: number, input: FlightInput, wind: THREE.Vector3, world: FlightWorld) {
     const s = this.settings;
     let { moveX, moveY, yaw, lift } = input;
     if (this.empty) {
@@ -127,7 +135,7 @@ export class Drone {
     }
     this.pos.addScaledVector(this.groundVel, dt);
 
-    this.collide(colliders);
+    this.collide(world);
 
     // battery
     if (!this.grounded) {
@@ -151,26 +159,22 @@ export class Drone {
     this.syncModel();
   }
 
-  private collide(colliders: Collider[]) {
+  private collide(world: FlightWorld) {
     const p = this.pos;
-    const ground = heightAt(p.x, p.z) + REST;
+    world.obstacles.pushOut(p, this.vel, 0.7);
+
+    const ground = world.groundAt(p.x, p.z, p.y - REST) + REST;
     if (p.y <= ground) {
       p.y = ground;
       if (this.vel.y < 0) this.vel.y = 0;
     }
     this.grounded = p.y <= ground + 0.02;
 
-    this.atCeiling = p.y > ground + MAX_ALTITUDE;
+    const ceiling = heightAt(p.x, p.z) + REST + MAX_ALTITUDE;
+    this.atCeiling = p.y > ceiling;
     if (this.atCeiling) {
-      p.y = ground + MAX_ALTITUDE;
+      p.y = ceiling;
       this.vel.y = Math.min(0, this.vel.y);
-    }
-
-    for (const c of colliders) {
-      if (p.y > c.base + c.h + 0.5) continue;
-      const along = Math.min(1, Math.max(0, (p.y - c.base) / c.h));
-      const radius = (c.kind === 'cone' ? c.r * (1 - along) : c.r) + 0.7;
-      this.pushOut(p.x - c.x, p.z - c.z, radius, c.x, c.z, false);
     }
 
     this.atBoundary = Math.hypot(p.x, p.z) > FLIGHT_RADIUS;
