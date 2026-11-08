@@ -2,19 +2,56 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#0b0b0b" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>MKPHOTO</title>
   </head>
   <body>
     <canvas id="scene"></canvas>
+
     <header class="brand">
       <svg viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
       <span>MKPHOTO</span>
-      <small>M0 · Grundgerüst</small>
+      <small>M1 · Fliegen</small>
     </header>
-    <pre id="stats" class="stats" aria-live="polite"></pre>
+    <pre id="stats" class="stats"></pre>
+
+    <section class="hud" aria-label="Fluganzeige">
+      <div class="battery">
+        <div class="battery-bar"><div id="battery-fill"></div></div>
+        <span id="battery-text">100 %</span>
+      </div>
+      <dl>
+        <dt>Höhe</dt><dd id="hud-alt">0 m</dd>
+        <dt>Tempo</dt><dd id="hud-speed">0 km/h</dd>
+        <dt>Wind</dt><dd><span id="wind-arrow" class="wind-arrow">↑</span> <span id="hud-wind">0 m/s</span></dd>
+        <dt>Start</dt><dd id="hud-home">0 m</dd>
+        <dt>Modus</dt><dd id="hud-mode">Assist</dd>
+      </dl>
+    </section>
+
+    <div id="message" class="message" role="status" hidden></div>
+
+    <aside class="help help-keyboard">
+      <b>Tastatur</b> W A S D bewegen · Q E / ← → drehen · Leertaste / Shift steigen, sinken<br />
+      P Assist/Pro · R zum Start · Mausrad Zoom
+    </aside>
+    <aside class="help help-gamepad">
+      <b>Gamepad</b> Linker Stick bewegen · Rechter Stick drehen, Kamera neigen · RT / LT steigen, sinken<br />
+      Y Assist/Pro · B zum Start
+    </aside>
+
+    <div id="touch" class="touch">
+      <div class="stick left"><div class="knob"></div><span>Bewegen</span></div>
+      <div class="stick right"><div class="knob"></div><span>Drehen · Höhe</span></div>
+      <div class="touch-buttons">
+        <button id="btn-mode" type="button">Assist</button>
+        <button id="btn-home" type="button">Start</button>
+      </div>
+      <p class="rotate-hint">Tipp: Handy quer halten</p>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
