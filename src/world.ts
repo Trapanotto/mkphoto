@@ -1,7 +1,10 @@
 import * as THREE from 'three';
+import { createAmbient } from './ambient';
 import { createLandmarks, type Landmark } from './landmarks';
-import { buildingsMesh } from './buildings';
+import { buildings3dMesh, RoofMap, type Buildings3d } from './buildings3d';
 import { ObstacleIndex } from './obstacles';
+import { createRoads, type Route } from './roads';
+import { createWater } from './water';
 import { addHull } from './outline';
 import { heightAt, terrainAt, WATER_EPS, type Grid, type TerrainData } from './terrain';
 import { toon } from './toon';
@@ -17,8 +20,9 @@ export const MAX_ALTITUDE = 120;
 
 export interface World {
   obstacles: ObstacleIndex;
+  routes: Route[];
   landmarks: Landmark[];
-  lake: THREE.MeshToonMaterial;
+  lake: { color: THREE.Color };
   windows: THREE.MeshBasicMaterial;
   /** Highest surface under a point at height y: terrain, water or a roof below it. */
   groundAt(x: number, z: number, y: number): number;
@@ -68,7 +72,25 @@ function terrainMesh(grid: Grid, colorAt: (h: number, steep: number, x: number, 
   return new THREE.Mesh(geo, mat);
 }
 
-export function createWorld(scene: THREE.Scene, data: TerrainData): World {
+/** Distance to the Kapellbrücke centre line (same path as the model). */
+const BRIDGE: [number, number][] = [[58.3, -75.4], [-12.3, 29.3], [-57.3, 62.9], [-55.4, 74.4]];
+function bridgeDistance(x: number, z: number) {
+  let best = Infinity;
+  for (let i = 0; i < BRIDGE.length - 1; i++) {
+    const [ax, az] = BRIDGE[i];
+    const [bx, bz] = BRIDGE[i + 1];
+    const ex = bx - ax, ez = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez)));
+    best = Math.min(best, Math.hypot(x - ax - ex * t, z - az - ez * t));
+  }
+  return best;
+}
+
+/** 1 by day, 0 at night; set by the time of day. */
+export const daylightLevel = { value: 1 };
+const daylight = () => daylightLevel.value;
+
+export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Buildings3d, density = 1): World {
   const obstacles = new ObstacleIndex();
   const rand = random(42);
 
@@ -92,16 +114,24 @@ export function createWorld(scene: THREE.Scene, data: TerrainData): World {
   );
   scene.add(core, far);
 
-  // --- Water: one plane at lake level ---------------------------------------------
-  const lake = toon('#3d8fd1');
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(data.far.size, data.far.size), lake);
-  water.rotation.x = -Math.PI / 2;
-  scene.add(water);
+  // --- Water: one cel-shaded plane at lake level; bridge and tower count as shore for the foam ---
+  const water = createWater(data.far.size, data.core.size / 2, [
+    (x, z) => bridgeDistance(x, z) < 2.8,
+    (x, z) => Math.hypot(x + 7, z - 38) < 7.2,
+  ]);
+  scene.add(water.mesh);
+  const lake = water;
 
   // --- Buildings and landmarks -----------------------------------------------------
-  scene.add(buildingsMesh(data.buildings, obstacles));
+  // buildings from swissBUILDINGS3D; their roofs also drive collision
+  const roofMap = new RoofMap(data.core.size / 2);
+  scene.add(buildings3dMesh(houses, roofMap));
+  obstacles.roofs = roofMap;
+  const routes = createRoads(scene, data.roads, obstacles);
   const windows = new THREE.MeshBasicMaterial({ color: '#3a2a22' });
   const landmarks = createLandmarks(scene, obstacles, windows);
+  const ambient = createAmbient(scene, data, routes, obstacles, density);
+  let clock = 0;
 
   // --- Home pad with an "H" ------------------------------------------------------------
   HOME.y = heightAt(HOME.x, HOME.z);
@@ -159,6 +189,7 @@ export function createWorld(scene: THREE.Scene, data: TerrainData): World {
 
   return {
     obstacles,
+    routes,
     landmarks,
     lake,
     windows,
@@ -166,6 +197,9 @@ export function createWorld(scene: THREE.Scene, data: TerrainData): World {
       return obstacles.groundAt(x, z, y, heightAt(x, z));
     },
     update(dt, wind) {
+      clock += dt;
+      ambient.update(dt, clock);
+      water.update(clock, wind, daylight());
       const strength = Math.hypot(wind.x, wind.z);
       // windsock points downwind; hangs limp at calm, horizontal at ~8 m/s
       sock.rotation.set(0, Math.atan2(-wind.z, wind.x), -Math.max(0, 1 - strength / 8) * 1.2);

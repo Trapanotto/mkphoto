@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ObstacleIndex, Strip, Tower } from './obstacles';
 import { addHull } from './outline';
-import { toon } from './toon';
+import { striped, toon } from './toon';
 
 /** A point on a landmark used to judge photos. Points with a normal only count from the side they face. */
 export interface SubjectPoint {
@@ -37,10 +37,45 @@ const TOWER = { x: -7, z: 38, radius: 6.2, wallTop: 26, roofRadius: 7.2, roofTop
 const WOOD = '#8a5a34';
 const WOOD_DARK = '#5e3b22';
 const ROOF = '#8c3a24';
-const FLOWERS = '#e0283a';
-const LEAVES = '#3f7a2e';
+const FLOWER_COLORS = ['#e0283a', '#ff4d6d', '#c81d3a', '#e0283a', '#ff7aa8', '#d42a4a', '#f2f2f2'];
+const PAINT_COLORS = ['#c9a25a', '#a8804a', '#7d8a9a', '#b59060', '#8a6a4a'];
 
-function bridgeSection(ax: number, az: number, bx: number, bz: number, materials: Record<string, THREE.Material>) {
+type Materials = Record<'wood' | 'woodDark' | 'boards' | 'roof' | 'ridge' | 'leaves' | 'flowers' | 'painting', THREE.Material>;
+
+const tmpM = new THREE.Matrix4();
+const tmpQ = new THREE.Quaternion();
+const tmpS = new THREE.Vector3();
+const tmpP = new THREE.Vector3();
+const tmpE = new THREE.Euler();
+
+/** InstancedMesh filled from a list of [x, y, z, rotX, rotY, rotZ, sx, sy, sz]. */
+function instances(geo: THREE.BufferGeometry, mat: THREE.Material, list: number[][], colors?: string[]) {
+  const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+  list.forEach(([x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1], i) => {
+    tmpM.compose(tmpP.set(x, y, z), tmpQ.setFromEuler(tmpE.set(rx, ry, rz)), tmpS.set(sx, sy, sz));
+    mesh.setMatrixAt(i, tmpM);
+    if (colors) mesh.setColorAt(i, new THREE.Color(colors[i % colors.length]));
+  });
+  return mesh;
+}
+
+/** Triangle in the x = 0 plane: base at y = 0 from z = -w/2 to w/2, tip at height h. */
+function triangle(w: number, h: number) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -w / 2, 0, 0, w / 2, 0, h, 0], 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function bridgeSection(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  materials: Materials,
+  ends: { start: boolean; end: boolean },
+  rand: () => number,
+) {
   const length = Math.hypot(bx - ax, bz - az) + 0.6; // small overlap at the kinks
   const g = new THREE.Group();
   g.position.set((ax + bx) / 2, 0, (az + bz) / 2);
@@ -54,101 +89,184 @@ function bridgeSection(ax: number, az: number, bx: number, bz: number, materials
     return m;
   };
 
-  // deck and the solid lower walls
+  // deck, plank walls with a hand rail, flower boxes outside, eaves beams
   add(new THREE.BoxGeometry(length, 0.35, HALF_WIDTH * 2), materials.woodDark, 0, DECK - 0.175, 0, 0.04);
   for (const side of [-1, 1]) {
-    add(new THREE.BoxGeometry(length, 1.0, 0.16), materials.wood, 0, DECK + 0.5, side * (HALF_WIDTH - 0.08), 0.03);
-    // flower boxes hanging outside: green box, red flowers on top
-    add(new THREE.BoxGeometry(length, 0.3, 0.4), materials.leaves, 0, DECK + 0.75, side * (HALF_WIDTH + 0.2));
-    add(new THREE.BoxGeometry(length, 0.22, 0.46), materials.flowers, 0, DECK + 0.98, side * (HALF_WIDTH + 0.2));
-    // eaves beam
+    add(new THREE.BoxGeometry(length, 1.0, 0.16), materials.boards, 0, DECK + 0.5, side * (HALF_WIDTH - 0.08), 0.03);
+    add(new THREE.BoxGeometry(length, 0.08, 0.26), materials.woodDark, 0, DECK + 1.04, side * (HALF_WIDTH - 0.08));
+    add(new THREE.BoxGeometry(length, 0.28, 0.38), materials.leaves, 0, DECK + 0.72, side * (HALF_WIDTH + 0.2));
     add(new THREE.BoxGeometry(length, 0.2, 0.2), materials.woodDark, 0, EAVES - 0.1, side * (HALF_WIDTH - 0.1));
   }
 
-  // posts between wall and roof, every 2.4 m on both sides
-  const postCount = Math.max(2, Math.floor(length / 2.4));
-  const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, EAVES - DECK - 1.0, 0.16), materials.wood, postCount * 2);
-  const m = new THREE.Matrix4();
-  for (let i = 0; i < postCount; i++) {
-    const x = -length / 2 + (i + 0.5) * (length / postCount);
-    for (const [k, side] of [
-      [0, -1],
-      [1, 1],
-    ]) {
-      m.makeTranslation(x, (DECK + 1.0 + EAVES) / 2, side * (HALF_WIDTH - 0.08));
-      posts.setMatrixAt(i * 2 + k, m);
+  // geraniums: two rows of small blooms in mixed reds along both flower boxes
+  const blooms: number[][] = [];
+  const bloomColors: string[] = [];
+  for (const side of [-1, 1]) {
+    for (let x = -length / 2 + 0.2; x < length / 2 - 0.2; x += 0.26) {
+      for (const row of [-0.1, 0.1]) {
+        const s = 0.75 + rand() * 0.6;
+        blooms.push([x + rand() * 0.1, DECK + 0.9 + rand() * 0.08, side * (HALF_WIDTH + 0.2 + row), 0, rand() * 3, 0, s, s * 0.8, s]);
+        bloomColors.push(FLOWER_COLORS[Math.floor(rand() * FLOWER_COLORS.length)]);
+      }
+      // trailing leaves hanging over the edge
+      if (rand() < 0.5) {
+        blooms.push([x, DECK + 0.52, side * (HALF_WIDTH + 0.42), 0, 0, 0, 1.3, 1.6, 1.3]);
+        bloomColors.push('#3f7a2e');
+      }
     }
   }
-  g.add(posts);
+  g.add(instances(new THREE.IcosahedronGeometry(0.11, 0), materials.flowers, blooms, bloomColors));
 
-  // gable roof: two tilted planes
+  // posts, tie beams, rafters and the painted gable boards inside the roof
+  const postCount = Math.max(2, Math.floor(length / 2.4));
   const run = HALF_WIDTH + 0.5;
   const rise = RIDGE - EAVES;
   const slope = Math.hypot(run, rise);
   const angle = Math.atan2(rise, run);
+  const posts: number[][] = [];
+  const ties: number[][] = [];
+  const rafters: number[][] = [];
+  const paintings: number[][] = [];
+  const paintColors: string[] = [];
+  for (let i = 0; i < postCount; i++) {
+    const x = -length / 2 + (i + 0.5) * (length / postCount);
+    for (const side of [-1, 1]) {
+      posts.push([x, (DECK + 1.0 + EAVES) / 2, side * (HALF_WIDTH - 0.08)]);
+      rafters.push([x, (EAVES + RIDGE) / 2 - 0.3, (side * run) / 2, side * angle, 0, 0]);
+    }
+    ties.push([x, EAVES - 0.05, 0]);
+    if (i % 2 === 0) {
+      paintings.push([x + 0.05, EAVES + 0.02, 0]);
+      paintColors.push(PAINT_COLORS[Math.floor(rand() * PAINT_COLORS.length)]);
+    }
+  }
+  g.add(instances(new THREE.BoxGeometry(0.16, EAVES - DECK - 1.0, 0.16), materials.wood, posts));
+  g.add(instances(new THREE.BoxGeometry(0.14, 0.16, HALF_WIDTH * 2), materials.woodDark, ties));
+  g.add(instances(new THREE.BoxGeometry(0.12, 0.14, slope), materials.woodDark, rafters));
+  g.add(instances(triangle(HALF_WIDTH * 2 - 0.5, rise - 0.5), materials.painting, paintings, paintColors));
+
+  // shingled gable roof with a ridge cap
   for (const side of [-1, 1]) {
     const roof = add(new THREE.BoxGeometry(length + 0.4, 0.18, slope), materials.roof, 0, (EAVES + RIDGE) / 2 - 0.15, (side * run) / 2, 0.05);
     roof.rotation.x = side * angle;
   }
+  add(new THREE.BoxGeometry(length + 0.4, 0.22, 0.4), materials.ridge, 0, RIDGE - 0.05, 0);
 
-  // wooden piles in the water, pairs every ~8 m
-  const pileCount = Math.max(1, Math.round(length / 8));
-  const piles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.18, DECK + 3, 6), materials.woodDark, pileCount * 2);
-  for (let i = 0; i < pileCount; i++) {
-    const x = -length / 2 + (i + 0.5) * (length / pileCount);
-    for (const [k, side] of [
-      [0, -1],
-      [1, 1],
-    ]) {
-      m.makeTranslation(x, (DECK - 3) / 2, side * (HALF_WIDTH - 0.6));
-      piles.setMatrixAt(i * 2 + k, m);
-    }
+  // closed gable boards at the two ends of the bridge
+  for (const [flag, x] of [
+    [ends.start, -length / 2 - 0.15],
+    [ends.end, length / 2 + 0.15],
+  ] as [boolean, number][]) {
+    if (!flag) continue;
+    const gable = add(triangle(run * 2 - 0.2, rise), materials.boards, x, EAVES - 0.1, 0, 0.04);
+    gable.rotation.y = 0;
   }
-  g.add(piles);
+
+  // pile yokes every ~8 m: three piles, a cap beam under the deck and crossed braces
+  const yokeCount = Math.max(1, Math.round(length / 8));
+  const piles: number[][] = [];
+  const caps: number[][] = [];
+  const braces: number[][] = [];
+  for (let i = 0; i < yokeCount; i++) {
+    const x = -length / 2 + (i + 0.5) * (length / yokeCount);
+    for (const z of [-(HALF_WIDTH - 0.5), 0, HALF_WIDTH - 0.5]) piles.push([x, (DECK - 3.2) / 2, z]);
+    caps.push([x, DECK - 0.5, 0]);
+    for (const dir of [-1, 1]) braces.push([x, 0.2, 0, dir * 0.75, 0, 0]);
+  }
+  g.add(instances(new THREE.CylinderGeometry(0.17, 0.2, DECK + 3.2, 6), materials.woodDark, piles));
+  g.add(instances(new THREE.BoxGeometry(0.3, 0.3, HALF_WIDTH * 2 + 0.2), materials.woodDark, caps));
+  g.add(instances(new THREE.BoxGeometry(0.12, 0.12, HALF_WIDTH * 2.4), materials.woodDark, braces));
   return g;
 }
 
 function wasserturm(windows: THREE.Material) {
   const g = new THREE.Group();
-  const stone = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.radius, TOWER.radius + 0.3, TOWER.wallTop + 3, 8), toon('#9c6b4e'));
-  stone.position.y = (TOWER.wallTop - 3) / 2;
+  const h = TOWER.wallTop;
+  // stone courses, a grey plinth in the water and two string courses
+  const stone = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.radius, TOWER.radius + 0.3, h, 8), striped('#9c6b4e', 1, 0.55, 0.22, 0.1));
+  stone.position.y = h / 2;
   addHull(stone, 0.12);
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.radius + 0.25, TOWER.radius + 0.25, 0.6, 8), toon('#c9a77c'));
-  band.position.y = TOWER.wallTop - 0.3;
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(TOWER.roofRadius, TOWER.roofTop - TOWER.wallTop, 8), toon('#6e3020'));
-  roof.position.y = (TOWER.wallTop + TOWER.roofTop) / 2;
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.radius + 0.5, TOWER.radius + 0.8, 4.5, 8), striped('#8a8580', 1, 0.7, 0.2, 0.1));
+  plinth.position.y = -1;
+  addHull(plinth, 0.1);
+  const bandMat = toon('#c9a77c');
+  const bandTop = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.radius + 0.3, TOWER.radius + 0.3, 0.7, 8), bandMat);
+  bandTop.position.y = h - 0.35;
+  const bandMid = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.radius + 0.12, TOWER.radius + 0.12, 0.35, 8), bandMat);
+  bandMid.position.y = 16;
+
+  // tall octagonal roof with ridge battens and a finial
+  const roofH = TOWER.roofTop - h;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(TOWER.roofRadius, roofH, 8), striped('#6e3020', 1, 0.42, 0.25, 0.12));
+  roof.position.y = h + roofH / 2;
   addHull(roof, 0.12);
-  g.add(stone, band, roof);
-  // narrow windows on four sides, at two heights
+  g.add(stone, plinth, bandTop, bandMid, roof);
+  const ridges: number[][] = [];
+  const edge = Math.hypot(TOWER.roofRadius, roofH);
+  const tilt = Math.atan2(TOWER.roofRadius, roofH);
+  for (let i = 0; i < 8; i++) {
+    // the cone's corners sit at multiples of 45°
+    const a = (i / 8) * Math.PI * 2;
+    ridges.push([Math.sin(a) * TOWER.roofRadius * 0.5, h + roofH / 2, Math.cos(a) * TOWER.roofRadius * 0.5, 0, a, 0]);
+  }
+  const ridgeMesh = instances(new THREE.BoxGeometry(0.18, edge, 0.18), toon('#4a2016'), ridges);
+  // tilt each batten outwards along its corner
+  ridges.forEach(([x, y, z, , a], i) => {
+    tmpM.compose(tmpP.set(x, y, z), tmpQ.setFromEuler(tmpE.set(-tilt, a, 0, 'YXZ')), tmpS.set(1, 1, 1));
+    ridgeMesh.setMatrixAt(i, tmpM);
+  });
+  g.add(ridgeMesh);
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 2.6, 6), toon('#3a2a20'));
+  spire.position.y = TOWER.roofTop + 1.2;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), toon('#d9b24a'));
+  ball.position.y = TOWER.roofTop + 1.6;
+  g.add(spire, ball);
+
+  // narrow windows on four sides, at three heights
   const winGeo = new THREE.PlaneGeometry(0.8, 1.6);
-  const apothem = (TOWER.radius + 0.12) * Math.cos(Math.PI / 8);
+  const apothem = (TOWER.radius + 0.06) * Math.cos(Math.PI / 8);
   for (let i = 0; i < 4; i++) {
     const a = Math.PI / 8 + (i * Math.PI) / 2;
-    for (const y of [12, 20]) {
+    for (const y of [8, 13, 20]) {
       const w = new THREE.Mesh(winGeo, windows);
       w.position.set(Math.sin(a) * apothem, y, Math.cos(a) * apothem);
       w.rotation.y = a;
       g.add(w);
     }
   }
+  // door towards the bridge kink
+  const doorA = Math.atan2(-12.3 - TOWER.x, 29.3 - TOWER.z);
+  const facet = Math.round((doorA - Math.PI / 8) / (Math.PI / 4)) * (Math.PI / 4) + Math.PI / 8;
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.4), toon('#4a2e1c'));
+  door.position.set(Math.sin(facet) * (apothem + 0.02), DECK + 1.2, Math.cos(facet) * (apothem + 0.02));
+  door.rotation.y = facet;
+  g.add(door);
+
   g.position.set(TOWER.x, 0, TOWER.z);
   return g;
 }
 
 export function createLandmarks(scene: THREE.Scene, obstacles: ObstacleIndex, windows: THREE.Material): Landmark[] {
-  const materials = {
+  const painting = toon('#ffffff');
+  painting.side = THREE.DoubleSide;
+  const materials: Materials = {
     wood: toon(WOOD),
     woodDark: toon(WOOD_DARK),
-    roof: toon(ROOF),
-    flowers: toon(FLOWERS),
-    leaves: toon(LEAVES),
+    boards: striped(WOOD, 0, 0.22, 0.3, 0.12),
+    roof: striped(ROOF, 2, 0.32, 0.3, 0.14),
+    ridge: toon('#6a2a18'),
+    leaves: toon('#3f7a2e'),
+    flowers: toon('#ffffff'),
+    painting,
   };
+  let seed = 11;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
   const bridge = new THREE.Group();
   for (let i = 0; i < BRIDGE_PATH.length - 1; i++) {
     const [ax, az] = BRIDGE_PATH[i];
     const [bx, bz] = BRIDGE_PATH[i + 1];
-    bridge.add(bridgeSection(ax, az, bx, bz, materials));
+    bridge.add(bridgeSection(ax, az, bx, bz, materials, { start: i === 0, end: i === BRIDGE_PATH.length - 2 }, rand));
     const strip = new Strip(ax, az, bx, bz, HALF_WIDTH + 0.5, DECK - 0.35, EAVES, RIDGE);
     strip.owner = 'kapellbruecke';
     obstacles.add(strip);

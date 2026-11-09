@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { windowNight } from './buildings';
+import { daylightLevel } from './world';
 import { outlineColor } from './outline';
 import type { Sky } from './sky';
 
@@ -40,7 +41,7 @@ export interface Environment {
   sun: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
   fog: THREE.Fog;
-  lake: THREE.MeshToonMaterial;
+  lake: { color: THREE.Color };
   windows: THREE.MeshBasicMaterial;
 }
 
@@ -96,6 +97,7 @@ export class TimeOfDay {
     env.sky.starOpacity = num('stars');
     env.windows.color.copy(WINDOW_OFF).lerp(WINDOW_ON, num('windows'));
     windowNight.value = num('windows');
+    daylightLevel.value = 1 - num('stars');
 
     // sun path: rises in the east (+x), sets in the west; the moon takes over at night
     const angle = ((this.hour - 6) / 12) * Math.PI;

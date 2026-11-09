@@ -183,9 +183,18 @@ export class Tower implements Obstacle {
 const CELL = 40;
 
 /** Uniform grid so the drone only checks obstacles near it. */
+/** Building tops per square metre (see RoofMap in buildings3d.ts). */
+export interface HeightMap {
+  top(x: number, z: number): number;
+}
+
+const DIRS = Array.from({ length: 8 }, (_, i) => [Math.cos((i / 8) * Math.PI * 2), Math.sin((i / 8) * Math.PI * 2)]);
+
 export class ObstacleIndex {
   private readonly cells = new Map<number, Obstacle[]>();
   private readonly n = { x: 0, z: 0 };
+  /** Buildings from swissBUILDINGS3D, handled as a height map. */
+  roofs: HeightMap | null = null;
 
   add(o: Obstacle) {
     for (let cx = Math.floor(o.minX / CELL); cx <= Math.floor(o.maxX / CELL); cx++)
@@ -204,6 +213,10 @@ export class ObstacleIndex {
   /** Highest top the point stands over, if it is above that top (roofs work as ground). */
   groundAt(x: number, z: number, y: number, terrain: number) {
     let ground = terrain;
+    if (this.roofs) {
+      const roof = this.roofs.top(x, z);
+      if (y >= roof - 0.8 && roof > ground) ground = roof;
+    }
     for (const o of this.near(x, z)) {
       if (o.distance(x, z, this.n) > 0) continue;
       const top = o.topAt(x, z);
@@ -214,6 +227,7 @@ export class ObstacleIndex {
 
   /** True if the point is inside a solid obstacle (with a margin around it). */
   solidAt(x: number, y: number, z: number, margin = 0, ignoreOwner?: string) {
+    if (this.roofs && y <= this.roofs.top(x, z) + margin) return true;
     for (const o of this.near(x, z)) {
       if (ignoreOwner && o.owner === ignoreOwner) continue;
       if (o.distance(x, z, this.n) > margin) continue;
@@ -222,8 +236,39 @@ export class ObstacleIndex {
     return false;
   }
 
+  /** Walls from the height map: anything higher than us around the drone pushes it away. */
+  private pushOutOfBuildings(p: THREE.Vector3, vel: THREE.Vector3, radius: number) {
+    const roofs = this.roofs!;
+    const wallAt = (x: number, z: number) => roofs.top(x, z) > p.y + 0.8;
+    if (wallAt(p.x, p.z)) {
+      // inside a building: step out to the nearest free spot
+      for (let r = 0.5; r <= 4; r += 0.5) {
+        for (const [dx, dz] of DIRS) {
+          if (!wallAt(p.x + dx * r, p.z + dz * r)) {
+            p.x += dx * r;
+            p.z += dz * r;
+            vel.x = vel.z = 0;
+            return;
+          }
+        }
+      }
+      return;
+    }
+    for (const [dx, dz] of DIRS) {
+      if (!wallAt(p.x + dx * radius, p.z + dz * radius)) continue;
+      p.x -= dx * 0.12;
+      p.z -= dz * 0.12;
+      const vn = vel.x * dx + vel.z * dz;
+      if (vn > 0) {
+        vel.x -= vn * dx;
+        vel.z -= vn * dz;
+      }
+    }
+  }
+
   /** Pushes a point of the given radius out of walls and from under overhangs. */
   pushOut(p: THREE.Vector3, vel: THREE.Vector3, radius: number) {
+    if (this.roofs) this.pushOutOfBuildings(p, vel, radius);
     for (const o of this.near(p.x, p.z)) {
       const d = o.distance(p.x, p.z, this.n);
       if (d >= radius) continue;

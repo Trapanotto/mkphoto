@@ -75,7 +75,7 @@ const MODERN_WALL = '#cfd6dc';
 const MODERN_ROOF = '#7c8288';
 
 /** Windows drawn in the wall shader: frames, shutters, shop fronts, and some lit at night. */
-function wallMaterial() {
+export function wallMaterial() {
   const m = toon('#ffffff');
   m.vertexColors = true;
   m.onBeforeCompile = (shader) => {
@@ -103,7 +103,7 @@ function wallMaterial() {
         '#include <color_fragment>',
         /* glsl */ `#include <color_fragment>
         float u = vWall.x, h = vWall.y, rest = vWall.z, roof = vWall.w;
-        float modern = step(0.5, fract(vSeed * 7.0)) * step(24.0, h + roof);
+        float modern = step(0.5, fract(abs(vSeed) * 7.0)) * step(24.0, h + roof);
         float floorH = mix(3.1, 3.6, modern);
         float colW = mix(2.7, 3.0, modern);
         vec2 cell = vec2(u / colW, h / floorH);
@@ -112,7 +112,7 @@ function wallMaterial() {
         vec2 aa = fwidth(cell) * 1.2;
         bool ground = id.y < 1.0;
         // keep a margin to corners and to the roof
-        float inWall = step(0.9, u) * step(0.9, rest) * step(0.6, h) * step(1.2, roof);
+        float inWall = step(0.0, vSeed) * step(0.9, rest) * step(0.6, h) * step(1.2, roof);
         float win = ground
           ? box(f, vec2(0.1, 0.08), vec2(0.9, 0.7), aa)
           : modern > 0.5 ? box(f, vec2(0.08, 0.22), vec2(0.92, 0.86), aa) : box(f, vec2(0.3, 0.26), vec2(0.7, 0.8), aa);

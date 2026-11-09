@@ -8,6 +8,7 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 
 - **M0 Grundgerüst:** Vite + TypeScript + three.js, automatisches Deployment auf GitHub Pages
 - **M1 Fliegen:** Flugmodell mit Assist- und Pro-Modus, Follow-Kamera, Akku (12 min, Laden auf dem Startplatz), Wind mit Böen, Flugverbot über 120 m und ausserhalb des Gebiets
+- **Detail-Durchgang:** Gebäude aus swissBUILDINGS3D (2830 Gebäude mit echten Dachformen, Fenster und Nachtlicht), Strassen, Wege und Brückenplatten aus swissTLM3D mit Gehwegen, 2725 Bäume an echten Standorten, Passanten, Autos und Busse, Schwäne, Enten, Möwen, Dampfschiff und Motorboote, detaillierte Kapellbrücke und Wasserturm, gezeichnetes Wasser mit Uferschaum und Wellenlinien
 - **M5 Aufträge & Menü:** Hauptmenü mit Logo (Kameraflug über die Brücke im Hintergrund), Intro, Studio mit Auftragsliste, 6 Aufträge als JSON-Daten (`public/data/luzern/assignments.json`), Honorar in CHF und Ruf mit 5 Stufen, die neue Aufträge freischalten, Spielstand in IndexedDB
 - **M4 Foto-Bewertung:** Messpunkte an Kapellbrücke und Wasserturm, Sicht- und Verdeckungstest, Teilnoten für Motiv, Komposition (Drittel, Horizont), Licht (Tageszeit, Gegenlicht), Kundenwunsch und Technik (Wind, Drehung), Bonus für besondere Perspektiven, 0–5 Sterne mit Kundenkommentar; Testauftrag „Postkarte: Kapellbrücke mit Wasserturm“, Motiv-Markierung im Sucher
 - **M3 Erstes Motiv:** echtes Gelände von Luzern aus swisstopo-Daten (swissALTI3D, swissSURFACE3D, VECTOR25, Höhenprofile für Pilatus und Rigi), Kapellbrücke und Wasserturm als Modelle, Kameramodus mit 24–72 mm, Gimbal und Raster, Fotos in 1800×1200 px, Album mit Download und Teilen
@@ -49,6 +50,12 @@ npm run build    # Typprüfung + Produktions-Build nach dist/
 node tools/import-luzern.mjs
 ```
 
-Lädt Gelände, Oberflächenmodell, Gebäude und Fernsicht von geo.admin.ch und schreibt sie nach `public/data/luzern/`. Daten: © swisstopo.
+Lädt Gelände, Oberflächenmodell, Strassen, Bäume und Fernsicht von geo.admin.ch und schreibt sie nach `public/data/luzern/`.
+
+```bash
+node tools/import-buildings3d.mjs
+```
+
+Lädt swissBUILDINGS3D (DXF) und schreibt die Gebäude als komprimierte Dreiecksliste. Daten: © swisstopo.
 
 Jeder Push auf `main` wird über GitHub Actions gebaut und auf GitHub Pages veröffentlicht.

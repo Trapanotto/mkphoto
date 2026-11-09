@@ -1,6 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { Album, shutterSound } from './album';
+import { loadBuildings3d } from './buildings3d';
 import { chf, feeFor, levelOf, loadAssignments, reputationFor, type Assignment } from './assignments';
 import { Drone, type FlightInput } from './drone';
 import { FollowCamera } from './followCamera';
@@ -53,14 +54,16 @@ const loading = $('loading');
 
 async function start() {
   const base = `${import.meta.env.BASE_URL}data/luzern/`;
-  const [data, jobs, saved] = await Promise.all([loadTerrain(base), loadAssignments(base), loadGame()]);
-  $('credits').textContent = `Geodaten ${data.meta.attribution}`;
+  const [data, houses, jobs, saved] = await Promise.all([loadTerrain(base), loadBuildings3d(base), loadAssignments(base), loadGame()]);
+  $('credits').textContent = 'Geodaten © swisstopo (swissALTI3D, swissSURFACE3D, swissBUILDINGS3D, swissTLM3D)';
 
   let game: SaveGame = saved ?? newGame();
   let hasSave = !!saved;
   let started = false;
 
-  const world = createWorld(scene, data);
+  // fewer people, cars and birds on weaker devices
+  const density = quality.level === 'high' ? 1 : quality.level === 'medium' ? 0.65 : 0.35;
+  const world = createWorld(scene, data, houses, density);
   const drone = new Drone();
   drone.mode = game.pro ? 'pro' : 'assist';
   scene.add(drone.group);
