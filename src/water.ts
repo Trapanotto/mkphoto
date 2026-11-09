@@ -114,6 +114,9 @@ export function createWater(size: number, coreHalf: number, solids: ((x: number,
       varying float vViewDist;
 
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      vec2 hash2(vec2 p) {
+        return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+      }
       float noise(vec2 p) {
         vec2 i = floor(p), f = fract(p);
         vec2 u = f * f * (3.0 - 2.0 * f);
@@ -124,39 +127,75 @@ export function createWater(size: number, coreHalf: number, solids: ((x: number,
         for (int i = 0; i < 3; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
         return v;
       }
-      // hard-edged line where x crosses the middle of each band
-      float line(float x, float width) {
-        float d = abs(fract(x) - 0.5);
-        float w = fwidth(x);
-        return 1.0 - smoothstep(width, width + w * 1.5, d);
+
+      // moving cells: distance to the nearest and second nearest point, the vector to the nearest, and its id
+      struct Cell { float f1; float f2; vec2 r; vec2 id; };
+      Cell cells(vec2 p, float t) {
+        vec2 n = floor(p), f = fract(p);
+        Cell c; c.f1 = 8.0; c.f2 = 8.0; c.r = vec2(0.0); c.id = vec2(0.0);
+        for (int j = -1; j <= 1; j++)
+        for (int i = -1; i <= 1; i++) {
+          vec2 g = vec2(float(i), float(j));
+          vec2 o = hash2(n + g);
+          o = 0.5 + 0.38 * sin(t + 6.2831 * o);
+          vec2 r = g + o - f;
+          float d = length(r);
+          if (d < c.f1) { c.f2 = c.f1; c.f1 = d; c.r = r; c.id = n + g; }
+          else if (d < c.f2) { c.f2 = d; }
+        }
+        return c;
+      }
+
+      // white crescent crests: an arc of a ring around each cell point, on the side the wind blows to
+      float crests(vec2 p, float t, vec2 wind, float thin) {
+        Cell c = cells(p, t * 0.6);
+        float pulse = 0.3 + 0.05 * sin(t * 1.7 + hash(c.id) * 6.28);
+        float aa = fwidth(c.f1) * 1.2;
+        float ring = smoothstep(pulse - thin - aa, pulse - thin, c.f1) * (1.0 - smoothstep(pulse, pulse + aa, c.f1));
+        vec2 dir = -c.r / max(c.f1, 1e-3);
+        float facing = smoothstep(0.35, 0.8, dot(dir, wind));
+        float keep = step(0.35, hash(c.id + 3.1));
+        return ring * facing * keep;
       }
 
       void main() {
         vec2 uv = (vWorld + uHalf) / (2.0 * uHalf);
         bool inside = all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)));
         float dist = inside ? texture2D(uDist, uv).r * 60.0 : 60.0;
-        float fade = 1.0 - smoothstep(250.0, 700.0, vViewDist);
+        float fade = 1.0 - smoothstep(180.0, 650.0, vViewDist);
+        vec2 drift = uWind * uTime * 0.6;
 
-        // colour: turquoise shallows, saturated blue further out, in two hard steps
-        vec3 col = mix(uShallow, uDeep, step(6.0, dist) * 0.55 + step(16.0, dist) * 0.45);
+        // colour: turquoise shallows, saturated blue further out, in hard steps with a wobbly border
+        float wob = (noise(vWorld * 0.08 + uTime * 0.05) - 0.5) * 3.0;
+        vec3 col = mix(uShallow, uDeep, step(6.0 + wob, dist) * 0.55 + step(16.0 + wob, dist) * 0.45);
 
-        // light blotches drifting with the wind
-        vec2 drift = uWind * uTime * 0.02;
-        float blot = fbm(vWorld * 0.012 + drift);
-        col = mix(col, mix(col, uShallow, 0.45), step(0.62, blot));
+        // soft lighter patches drifting slowly
+        float blot = fbm(vWorld * 0.01 + drift * 0.01);
+        col = mix(col, mix(col, uShallow, 0.35), step(0.64, blot));
 
-        // drawn wave lines: contours of slow noise, broken into short strokes
-        float n = fbm(vWorld * 0.03 + drift * 1.5 + vec2(0.0, uTime * 0.01));
-        float strokes = line(n * 7.0, 0.035) * step(0.55, fbm(vWorld * 0.05 - drift));
-        col = mix(col, uFoam, strokes * fade * 0.9);
+        // fine light network in the shallows (sunlight through ripples)
+        Cell net = cells(vWorld * 0.22 + drift * 0.05, uTime * 0.5);
+        float edge = 1.0 - smoothstep(0.03, 0.06 + fwidth(net.f2 - net.f1), net.f2 - net.f1);
+        col = mix(col, mix(col, vec3(1.0), 0.16), edge * (1.0 - smoothstep(2.0, 9.0, dist)) * fade * step(0.45, noise(vWorld * 0.05)));
 
-        // shore foam: a solid rim that breathes, and a second ring rolling out
-        float rim = 1.0 - step(1.6 + 0.7 * sin(uTime * 1.3 + vWorld.x * 0.05), dist);
-        float ringPos = 2.5 + fract(uTime * 0.18) * 7.0;
-        float ring = (1.0 - smoothstep(0.35, 0.55, abs(dist - ringPos))) * (1.0 - fract(uTime * 0.18));
-        // the ring breaks up a little so it doesn't look like a stamp
-        ring *= step(0.35, noise(vWorld * 0.25 + uTime * 0.2));
-        col = mix(col, uFoam, max(rim, ring * 0.9) * step(0.01, 60.0 - dist + 0.001));
+        // crescent crests: a big layer and a small one, both drifting with the wind
+        float big = crests(vWorld * 0.075 - drift * 0.075, uTime, uWind, 0.06);
+        float small = crests(vWorld * 0.19 - drift * 0.19 + 7.3, uTime * 1.3, uWind, 0.08) * 0.75;
+        col = mix(col, uFoam, max(big, small) * fade);
+
+        // twinkles: a few sparkles that flash on and off
+        vec2 sp = floor(vWorld * 0.6);
+        float tw = step(0.993, hash(sp)) * step(0.85, sin(uTime * 3.0 + hash(sp + 1.7) * 30.0));
+        col = mix(col, vec3(1.0), tw * fade);
+
+        // shore foam: a wobbly solid rim, and a broken second line rolling out and fading
+        float rimW = 1.4 + 0.6 * sin(uTime * 1.3 + vWorld.x * 0.05 + vWorld.y * 0.04) + (noise(vWorld * 0.3) - 0.5) * 1.2;
+        float rim = 1.0 - step(rimW, dist);
+        float phase = fract(uTime * 0.16);
+        float ringPos = 2.5 + phase * 7.0;
+        float ring = (1.0 - smoothstep(0.3, 0.5, abs(dist - ringPos))) * (1.0 - phase);
+        ring *= step(0.4, noise(vWorld * 0.35 + uTime * 0.2));
+        col = mix(col, uFoam, max(rim, ring * 0.9) * step(dist, 59.0));
 
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>

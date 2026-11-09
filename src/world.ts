@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createAmbient } from './ambient';
 import { createLandmarks, type Landmark } from './landmarks';
 import { buildings3dMesh, RoofMap, type Buildings3d } from './buildings3d';
-import { ObstacleIndex } from './obstacles';
+import { ObstacleIndex, Tower } from './obstacles';
 import { createRoads, type Route } from './roads';
 import { createWater } from './water';
 import { addHull } from './outline';
@@ -72,6 +73,49 @@ function terrainMesh(grid: Grid, colorAt: (h: number, steep: number, x: number, 
   return new THREE.Mesh(geo, mat);
 }
 
+/** Pad surface: dark disc, yellow ring, the MK mark and the name around it. */
+function padTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#23272d';
+  g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = '#ffc531';
+  g.lineWidth = 22;
+  g.beginPath();
+  g.arc(256, 256, 232, 0, Math.PI * 2);
+  g.stroke();
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(256, 256, 200, 0, Math.PI * 2);
+  g.stroke();
+  // MK mark, same strokes as the logo (200 × 200 artwork, scaled up)
+  g.save();
+  g.translate(256 - 100 * 1.25, 236 - 100 * 1.25);
+  g.scale(1.25, 1.25);
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 18;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.beginPath();
+  g.moveTo(52, 140);
+  g.lineTo(52, 60);
+  g.lineTo(100, 132);
+  g.lineTo(150, 60);
+  g.moveTo(124, 96);
+  g.lineTo(150, 140);
+  g.stroke();
+  g.restore();
+  g.fillStyle = '#ffffff';
+  g.font = '800 46px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.fillText('MKPHOTO', 256, 418);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 /** Distance to the Kapellbrücke centre line (same path as the model). */
 const BRIDGE: [number, number][] = [[58.3, -75.4], [-12.3, 29.3], [-57.3, 62.9], [-55.4, 74.4]];
 function bridgeDistance(x: number, z: number) {
@@ -133,21 +177,29 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   const ambient = createAmbient(scene, data, routes, obstacles, density);
   let clock = 0;
 
-  // --- Home pad with an "H" ------------------------------------------------------------
+  // --- Launch pad: a raised platform with the MKPHOTO mark, above the quay's road surface ----
   HOME.y = heightAt(HOME.x, HOME.z);
+  const PAD_R = 2.2;
+  const PAD_H = 0.4;
   const pad = new THREE.Group();
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.1, 32), toon('#2b2b2b'));
-  const markMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-  const barL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 1.4), markMat);
-  barL.position.set(-0.45, 0.06, 0);
-  const barR = barL.clone();
-  barR.position.x = 0.45;
-  const barM = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.18), markMat);
-  barM.position.y = 0.06;
-  pad.add(disc, barL, barR, barM);
-  pad.position.set(HOME.x, HOME.y + 0.05, HOME.z);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(PAD_R + 0.15, PAD_R + 0.3, PAD_H, 40), toon('#3a3f46'));
+  base.position.y = PAD_H / 2;
+  addHull(base, 0.04);
+  const top = new THREE.Mesh(new THREE.CircleGeometry(PAD_R, 48), new THREE.MeshBasicMaterial({ map: padTexture() }));
+  top.rotation.x = -Math.PI / 2;
+  top.position.y = PAD_H + 0.01;
+  // little lights around the rim
+  const lights = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffc531' }), 12);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    lights.setMatrixAt(i, new THREE.Matrix4().makeTranslation(Math.cos(a) * (PAD_R + 0.08), PAD_H, Math.sin(a) * (PAD_R + 0.08)));
+  }
+  pad.add(base, top, lights);
+  pad.position.set(HOME.x, HOME.y, HOME.z);
   pad.rotation.y = HOME_YAW;
   scene.add(pad);
+  // the drone stands on the platform
+  obstacles.add(new Tower(HOME.x, HOME.z, PAD_R + 0.2, HOME.y - 1, HOME.y + PAD_H, PAD_R + 0.2, HOME.y + PAD_H));
 
   // --- Windsock next to the pad ----------------------------------------------------------
   const sockX = HOME.x + 3;
@@ -163,26 +215,52 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   sock.position.set(sockX, sockY + 2.9, HOME.z);
   scene.add(sockPole, sock);
 
-  // --- Clouds: flattened puffs drifting with the wind -------------------------------------
-  const puffGeo = new THREE.IcosahedronGeometry(1, 1);
+  // --- Clouds: cumulus heaps with flat bases, white on top, blue-grey below -------------------
   const cloudMat = toon('#ffffff');
-  // clouds are mostly seen from below: lift the shadow side so they stay light
-  cloudMat.emissive.set('#5c6270');
-  const clouds: THREE.Group[] = [];
-  for (let i = 0; i < 16; i++) {
-    const cloud = new THREE.Group();
-    const puffs = 3 + Math.floor(rand() * 4);
-    for (let j = 0; j < puffs; j++) {
-      const puff = new THREE.Mesh(puffGeo, cloudMat);
-      const r = 10 + rand() * 12;
-      puff.scale.set(r, r * 0.55, r);
-      puff.position.set((j - puffs / 2) * 14 + rand() * 6, rand() * 4, rand() * 12 - 6);
-      addHull(puff, 0.04);
-      cloud.add(puff);
+  cloudMat.vertexColors = true;
+  const cloudTop = new THREE.Color('#ffffff');
+  const cloudBase = new THREE.Color('#b9c6d8');
+  const clouds: THREE.Mesh[] = [];
+  for (let i = 0; i < 18; i++) {
+    const width = 50 + rand() * 90;
+    const puffs: THREE.BufferGeometry[] = [];
+    const count = 7 + Math.floor(rand() * 6);
+    for (let j = 0; j < count; j++) {
+      // big puffs in the middle, small ones at the ends: a dome
+      const t = count === 1 ? 0 : (j / (count - 1)) * 2 - 1;
+      const r = width * (0.22 - 0.12 * Math.abs(t)) * (0.85 + rand() * 0.3);
+      const geo = new THREE.IcosahedronGeometry(r, 2);
+      geo.translate(t * width * 0.45, r * (0.35 + rand() * 0.35), (rand() - 0.5) * width * 0.25);
+      puffs.push(geo);
     }
+    // a few smaller puffs on top for the cauliflower look
+    for (let j = 0; j < 3; j++) {
+      const r = width * (0.1 + rand() * 0.06);
+      const geo = new THREE.IcosahedronGeometry(r, 2);
+      geo.translate((rand() - 0.5) * width * 0.5, width * 0.22 + rand() * width * 0.08, (rand() - 0.5) * width * 0.2);
+      puffs.push(geo);
+    }
+    const geo = mergeGeometries(puffs.map((g) => g.toNonIndexed()))!;
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const c = new THREE.Color();
+    let top = 0;
+    for (let k = 0; k < pos.count; k++) top = Math.max(top, pos.getY(k));
+    for (let k = 0; k < pos.count; k++) {
+      // flat base, and a colour ramp from the blue-grey base to white tops
+      const y = Math.max(0, pos.getY(k));
+      pos.setY(k, y);
+      c.copy(cloudBase).lerp(cloudTop, Math.min(1, Math.pow(y / top, 0.6) * 1.15));
+      c.toArray(colors, k * 3);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    const cloud = new THREE.Mesh(geo, cloudMat);
+    addHull(cloud, 0.6);
     const a = rand() * Math.PI * 2;
-    const d = rand() * 900;
-    cloud.position.set(Math.cos(a) * d, 180 + rand() * 120, Math.sin(a) * d);
+    const d = 150 + rand() * 900;
+    cloud.position.set(Math.cos(a) * d, 170 + rand() * 140, Math.sin(a) * d);
+    cloud.rotation.y = rand() * Math.PI;
     scene.add(cloud);
     clouds.push(cloud);
   }
@@ -200,6 +278,8 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
       clock += dt;
       ambient.update(dt, clock);
       water.update(clock, wind, daylight());
+      // clouds stay bright by day and go dark at night
+      cloudMat.emissive.setRGB(0.32, 0.34, 0.38).multiplyScalar(daylight());
       const strength = Math.hypot(wind.x, wind.z);
       // windsock points downwind; hangs limp at calm, horizontal at ~8 m/s
       sock.rotation.set(0, Math.atan2(-wind.z, wind.x), -Math.max(0, 1 - strength / 8) * 1.2);
