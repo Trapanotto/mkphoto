@@ -59,24 +59,3 @@ export class MainMenu {
     $('menu-main').hidden = on;
   }
 }
-
-/** One-time welcome text for a new game. */
-export class Intro {
-  isOpen = false;
-  onDone?: () => void;
-  private readonly el = $('intro');
-
-  constructor() {
-    $('intro-go').addEventListener('click', () => {
-      this.isOpen = false;
-      this.el.hidden = true;
-      this.onDone?.();
-    });
-    this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
-  }
-
-  open() {
-    this.isOpen = true;
-    this.el.hidden = false;
-  }
-}

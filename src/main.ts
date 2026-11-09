@@ -8,7 +8,7 @@ import { FollowCamera } from './followCamera';
 import { CameraDrag } from './cameraDrag';
 import { Hud } from './hud';
 import { Input, type Action } from './input';
-import { Intro, MainMenu } from './menu';
+import { MainMenu } from './menu';
 import { OutlineRenderer } from './outline';
 import { PhotoCamera } from './photoCamera';
 import { savePhoto } from './photos';
@@ -81,7 +81,6 @@ async function start() {
   const brief = new BriefPanel();
   const studio = new Studio(jobs, () => game);
   const menu = new MainMenu();
-  const intro = new Intro();
   const hud = new Hud();
   const studioKey = isMobile ? 'Menü → Studio' : 'Taste M';
 
@@ -189,13 +188,8 @@ async function start() {
     started = true;
     updateWallet();
     showHelp(true);
-    if (!game.introSeen) intro.open();
   }
 
-  intro.onDone = () => {
-    game.introSeen = true;
-    save();
-  };
 
   menu.onAction = (action) => {
     switch (action) {
@@ -383,7 +377,7 @@ async function start() {
     const c = input.read();
 
     // overlays; Escape / B closes the innermost one, in flight it opens the menu
-    if (menu.isOpen || intro.isOpen) {
+    if (menu.isOpen) {
       if (c.back && started && menu.isOpen) menu.close();
       c.back = c.menu = c.album = c.studio = c.shoot = false;
     }
@@ -416,7 +410,7 @@ async function start() {
       album.toggle();
     }
 
-    const paused = menu.isOpen || intro.isOpen || album.isOpen || ratingCard.isOpen || studio.isOpen;
+    const paused = menu.isOpen || album.isOpen || ratingCard.isOpen || studio.isOpen;
     if (!paused) {
       if (c.toggleCamera) setCamera(!photo.active);
       if (photo.active) {
