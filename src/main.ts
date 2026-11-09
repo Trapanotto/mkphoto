@@ -123,7 +123,7 @@ async function start() {
       }
     } else if (!isDay(clock.hour)) {
       // day jobs happen by day
-      clock.hour = 10;
+      clock.hour = DAY_DEFAULT;
       timeNote = ` · Zeit auf ${clock.label} gestellt`;
     }
     save();
@@ -140,12 +140,7 @@ async function start() {
   const DAY_START = 7;
   const DAY_END = 19.5;
   const isDay = (h: number) => h >= DAY_START && h < DAY_END;
-
-  /** Next interesting light; without a timed job, night is skipped to the morning. */
-  function skipTime() {
-    clock.skip();
-    if (!activeJob()?.hours && !isDay(clock.hour)) clock.hour = DAY_START;
-  }
+  const DAY_DEFAULT = 10;
 
   /** What handing in a rated photo would bring for the active job. */
   function offerFor(job: Assignment, rating: Rating): Offer {
@@ -241,11 +236,6 @@ async function start() {
         drone.reset();
         follow.snap(drone);
         menu.close();
-        break;
-      case 'time':
-        skipTime();
-        menu.close();
-        showToast(`Zeit: ${clock.label}`);
         break;
     }
   };
@@ -439,14 +429,13 @@ async function start() {
           follow.snap(drone);
         }
       }
-      if (c.skipTime) skipTime();
       if (c.cycleQuality) quality.cycle();
     }
 
     clock.update(dt);
-    // night only when a job asks for it: otherwise evening runs into the next morning
+    // night only when a job asks for it; otherwise back to a bright day
     const timedJob = activeJob()?.hours;
-    if (!timedJob && !isDay(clock.hour)) clock.hour = DAY_START;
+    if (!timedJob && !isDay(clock.hour)) clock.hour = DAY_DEFAULT;
     clock.apply({ sky, sun, hemi, fog, lake: world.lake, windows: world.windows });
     wind.update(t);
     world.update(dt, wind.base);

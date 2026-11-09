@@ -1,6 +1,6 @@
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home' | 'time';
+export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home';
 
 /** Title screen and pause menu. The game keeps rendering behind it. */
 export class MainMenu {
@@ -34,7 +34,6 @@ export class MainMenu {
     w.textContent = wallet ?? '';
     w.hidden = !wallet;
     $('menu-home').hidden = !started;
-    $('menu-time').hidden = !started;
   }
 
   setLabels(quality: string, mode: string) {

@@ -33,7 +33,6 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 | Studio (Aufträge) | M | – | Menü → Studio |
 | Menü | Esc | Start | ☰ oben links |
 | Hilfe ein/aus | H | – | – |
-| Tageszeit weiter | T | X | Menü → Zeit vorspulen |
 | Grafikstufe (Auto/Hoch/Mittel/Niedrig) | G | – | Menü → Optionen |
 | Zoom | Mausrad | – | – |
 

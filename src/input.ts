@@ -11,7 +11,6 @@ export interface InputState {
   /** One-shot actions, true only in the frame they were triggered. */
   toggleMode: boolean;
   home: boolean;
-  skipTime: boolean;
   cycleQuality: boolean;
   toggleCamera: boolean;
   shoot: boolean;
@@ -31,7 +30,6 @@ export interface InputState {
 export type Action =
   | 'toggleMode'
   | 'home'
-  | 'skipTime'
   | 'cycleQuality'
   | 'toggleCamera'
   | 'shoot'
@@ -46,7 +44,6 @@ export type Action =
 const KEY_ACTIONS: Record<string, Action> = {
   KeyP: 'toggleMode',
   KeyR: 'home',
-  KeyT: 'skipTime',
   KeyG: 'cycleQuality',
   KeyC: 'toggleCamera',
   Space: 'shoot',
@@ -107,7 +104,6 @@ export class Input {
       camPitch: 0,
       toggleMode: this.pending.has('toggleMode'),
       home: this.pending.has('home'),
-      skipTime: this.pending.has('skipTime'),
       cycleQuality: this.pending.has('cycleQuality'),
       toggleCamera: this.pending.has('toggleCamera'),
       shoot: this.pending.has('shoot'),
@@ -160,7 +156,6 @@ export class Input {
     const down = (i: number) => pressed[i] && !this.padPrev[i];
     if (down(0)) s.shoot = true;
     if (down(1)) s.home = s.back = true;
-    if (down(2)) s.skipTime = true;
     if (down(3)) s.toggleMode = s.cycleGrid = true;
     if (down(4)) s.toggleCamera = true;
     if (down(5)) s.toggleOrientation = true;

@@ -51,10 +51,10 @@ const mixColor = (out: THREE.Color, a: string, b: string, t: number) => out.copy
 const WINDOW_OFF = new THREE.Color('#3a2a22');
 const WINDOW_ON = new THREE.Color('#ffc864');
 
-/** Game clock. One in-game day lasts 12 real minutes. */
+/** Game clock. Time stands still; jobs set the light they need. */
 export class TimeOfDay {
   hour = 10;
-  hoursPerSecond = 24 / (12 * 60);
+  hoursPerSecond = 0;
 
   update(dt: number) {
     this.hour = (this.hour + dt * this.hoursPerSecond) % 24;
