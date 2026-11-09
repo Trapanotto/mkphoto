@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { addHull } from './outline';
-import { toon } from './toon';
+import { createDroneModel, type DroneModel } from './droneModel';
 import type { ObstacleIndex } from './obstacles';
 import { FLIGHT_RADIUS, HOME, HOME_YAW, MAX_ALTITUDE, heightAt } from './world';
 
@@ -43,35 +42,18 @@ export class Drone {
   atBoundary = false;
   atCeiling = false;
 
-  private readonly rotors: THREE.Mesh[] = [];
+  private readonly model: DroneModel;
+  /** Camera tilt shown on the model's gimbal. */
+  gimbal = -0.15;
+  private clock = 0;
   private tiltX = 0;
   private tiltZ = 0;
   private rotorAngle = 0;
+  private spinRate = 0;
 
   constructor() {
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 1.2), toon('#f2f2f2'));
-    addHull(hull, 0.03);
-    this.group.add(hull);
-    const corners: [number, number][] = [
-      [1, -1],
-      [-1, -1],
-      [1, 1],
-      [-1, 1],
-    ];
-    for (const [x, z] of corners) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 1.1), toon('#222222'));
-      arm.position.set(x * 0.45, 0, z * 0.45);
-      arm.rotation.y = Math.atan2(x, z);
-      // front rotors red, rear grey, so the heading is readable
-      const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.04, 16), toon(z < 0 ? '#d23a2a' : '#9a9a9a'));
-      rotor.position.set(x * 0.85, 0.2, z * 0.85);
-      addHull(rotor, 0.03);
-      this.group.add(arm, rotor);
-      this.rotors.push(rotor);
-    }
-    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), toon('#111111'));
-    lens.position.set(0, -0.25, -0.5);
-    this.group.add(lens);
+    this.model = createDroneModel();
+    this.group.add(this.model.group);
     this.reset();
   }
 
@@ -156,6 +138,8 @@ export class Drone {
 
     const spin = this.empty && this.grounded ? 0 : this.grounded && !takingOff ? 10 : 45;
     this.rotorAngle += spin * dt;
+    this.spinRate = spin;
+    this.clock += dt;
     this.syncModel();
   }
 
@@ -199,6 +183,8 @@ export class Drone {
   private syncModel() {
     this.group.position.copy(this.pos);
     this.group.rotation.set(this.tiltX, this.yaw, this.tiltZ, 'YXZ');
-    for (const r of this.rotors) r.rotation.y = this.rotorAngle;
+    this.model.spin(this.rotorAngle, this.spinRate);
+    this.model.setGimbal(this.gimbal);
+    this.model.blink(this.clock);
   }
 }

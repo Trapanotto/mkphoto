@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ObstacleIndex, Strip } from './obstacles';
 import { terrainAt, WATER_EPS, type RoadData } from './terrain';
-import { toon } from './toon';
+import { striped, toon } from './toon';
 
 /** A road or path, resampled every few metres with its height (terrain or bridge deck). */
 export interface Route {
@@ -71,7 +71,16 @@ function heights(pts: [number, number][], name: string | null) {
   return { y, bridged: water, hasDeck: true };
 }
 
-export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: ObstacleIndex): Route[] {
+const mat4 = (x: number, y: number, z: number, yaw: number, sx = 1, sy = 1, sz = 1) =>
+  new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(sx, sy, sz));
+
+/** lampGlow: material of the lamp heads, lit at night by the time of day. */
+export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: ObstacleIndex, lampGlow: THREE.Material): Route[] {
+  const rails: THREE.Matrix4[] = [];
+  const posts: THREE.Matrix4[] = [];
+  const piers: THREE.Matrix4[] = [];
+  const poles: THREE.Matrix4[] = [];
+  const lamps: THREE.Matrix4[] = [];
   const routes: Route[] = [];
   const pos: number[] = [];
   const col: number[] = [];
@@ -80,6 +89,7 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
   const quad = (list: number[], a: number[], b: number[], c: number[], d: number[]) => list.push(...a, ...b, ...c, ...a, ...c, ...d);
 
   for (const r of roads) {
+    let bridgeStep = 0;
     const cls = CLASSES[r.type] ?? { width: 2.5, surface: 'path' as const };
     const pedestrianZone = r.kind === 'walk' && cls.surface !== 'path';
     const color = cls.surface === 'asphalt' && r.kind === 'car' ? SURFACE.asphalt : pedestrianZone ? (r.type === 10 || r.type === 20 ? SURFACE.pedestrian : SURFACE.lane) : SURFACE.path;
@@ -142,6 +152,33 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
         }
         const strip = new Strip(a.x, a.z, b.x, b.z, half, Math.min(a.y, b.y) - drop, Math.max(a.y, b.y), Math.max(a.y, b.y));
         obstacles.add(strip);
+
+        // railings: a post at every step and a hand rail along both edges
+        const yaw = Math.atan2(dx, dz);
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2;
+        for (const s of [-1, 1]) {
+          const ex = (nx / half) * (half - 0.1) * s, ez = (nz / half) * (half - 0.1) * s;
+          rails.push(mat4(mx + ex, my + 1.05, mz + ez, yaw, 1, 1, len));
+          rails.push(mat4(mx + ex, my + 0.55, mz + ez, yaw, 1, 0.6, len));
+          posts.push(mat4(a.x + ex, a.y + 0.55, a.z + ez, yaw));
+        }
+        // piers down into the water every 20 m: two on road bridges, one under footbridges
+        if (bridgeStep % 8 === 4) {
+          const depth = a.y - drop + 4;
+          const cols = r.kind === 'car' ? [-0.55, 0.55] : [0];
+          for (const c of cols) {
+            const w = r.kind === 'car' ? 1.4 : 0.5;
+            piers.push(mat4(a.x + (nx / half) * half * c, a.y - drop - depth / 2, a.z + (nz / half) * half * c, yaw, w, depth, w * 1.6));
+          }
+        }
+        // street lamps every 25 m, alternating sides
+        if (bridgeStep % 10 === 2) {
+          const s = (bridgeStep / 10) % 2 < 1 ? 1 : -1;
+          const ex = (nx / half) * (half - 0.25) * s, ez = (nz / half) * (half - 0.25) * s;
+          poles.push(mat4(a.x + ex, a.y + 2.4, a.z + ez, yaw));
+          lamps.push(mat4(a.x + ex * 0.8, a.y + 4.75, a.z + ez * 0.8, yaw));
+        }
+        bridgeStep++;
       }
     }
   }
@@ -158,6 +195,19 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
   mat.polygonOffsetUnits = -2;
   const mesh = new THREE.Mesh(geo, mat);
   scene.add(mesh);
+
+  const inst = (geo: THREE.BufferGeometry, m: THREE.Material, list: THREE.Matrix4[]) => {
+    const mesh = new THREE.InstancedMesh(geo, m, list.length);
+    list.forEach((x, i) => mesh.setMatrixAt(i, x));
+    scene.add(mesh);
+    return mesh;
+  };
+  const metal = toon('#4a5560');
+  inst(new THREE.BoxGeometry(0.06, 0.06, 1), metal, rails);
+  inst(new THREE.BoxGeometry(0.07, 1.1, 0.07), metal, posts);
+  inst(new THREE.BoxGeometry(1, 1, 1), striped('#a7a29a', 1, 0.6, 0.15, 0.08), piers);
+  inst(new THREE.CylinderGeometry(0.07, 0.1, 4.8, 6), toon('#3a4048'), poles);
+  inst(new THREE.CylinderGeometry(0.28, 0.18, 0.35, 8), lampGlow, lamps);
 
   const deckGeo = new THREE.BufferGeometry();
   deckGeo.setAttribute('position', new THREE.Float32BufferAttribute(deckPos, 3));

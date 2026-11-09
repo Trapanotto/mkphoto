@@ -127,8 +127,8 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   const roofMap = new RoofMap(data.core.size / 2);
   scene.add(buildings3dMesh(houses, roofMap));
   obstacles.roofs = roofMap;
-  const routes = createRoads(scene, data.roads, obstacles);
   const windows = new THREE.MeshBasicMaterial({ color: '#3a2a22' });
+  const routes = createRoads(scene, data.roads, obstacles, windows);
   const landmarks = createLandmarks(scene, obstacles, windows);
   const ambient = createAmbient(scene, data, routes, obstacles, density);
   let clock = 0;

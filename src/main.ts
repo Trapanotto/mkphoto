@@ -416,6 +416,7 @@ async function start() {
     } else if (!photo.active) {
       follow.update(drone, c.camPitch, dt);
     }
+    drone.gimbal = photo.gimbal;
     sky.follow(view);
 
     outlines.render(scene, view);

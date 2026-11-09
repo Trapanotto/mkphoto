@@ -40,7 +40,7 @@ const ROOF = '#8c3a24';
 const FLOWER_COLORS = ['#e0283a', '#ff4d6d', '#c81d3a', '#e0283a', '#ff7aa8', '#d42a4a', '#f2f2f2'];
 const PAINT_COLORS = ['#c9a25a', '#a8804a', '#7d8a9a', '#b59060', '#8a6a4a'];
 
-type Materials = Record<'wood' | 'woodDark' | 'boards' | 'roof' | 'ridge' | 'leaves' | 'flowers' | 'painting', THREE.Material>;
+type Materials = Record<'wood' | 'woodDark' | 'boards' | 'deck' | 'roof' | 'ridge' | 'leaves' | 'flowers' | 'painting' | 'glow' | 'iron', THREE.Material>;
 
 const tmpM = new THREE.Matrix4();
 const tmpQ = new THREE.Quaternion();
@@ -90,7 +90,7 @@ function bridgeSection(
   };
 
   // deck, plank walls with a hand rail, flower boxes outside, eaves beams
-  add(new THREE.BoxGeometry(length, 0.35, HALF_WIDTH * 2), materials.woodDark, 0, DECK - 0.175, 0, 0.04);
+  add(new THREE.BoxGeometry(length, 0.35, HALF_WIDTH * 2), materials.deck, 0, DECK - 0.175, 0, 0.04);
   for (const side of [-1, 1]) {
     add(new THREE.BoxGeometry(length, 1.0, 0.16), materials.boards, 0, DECK + 0.5, side * (HALF_WIDTH - 0.08), 0.03);
     add(new THREE.BoxGeometry(length, 0.08, 0.26), materials.woodDark, 0, DECK + 1.04, side * (HALF_WIDTH - 0.08));
@@ -144,6 +144,25 @@ function bridgeSection(
   g.add(instances(new THREE.BoxGeometry(0.14, 0.16, HALF_WIDTH * 2), materials.woodDark, ties));
   g.add(instances(new THREE.BoxGeometry(0.12, 0.14, slope), materials.woodDark, rafters));
   g.add(instances(triangle(HALF_WIDTH * 2 - 0.5, rise - 0.5), materials.painting, paintings, paintColors));
+
+  // knee braces from each post up to the eaves beam, along the bridge in both directions
+  const knees: number[][] = [];
+  const lanterns: number[][] = [];
+  const chains: number[][] = [];
+  for (let i = 0; i < postCount; i++) {
+    const x = -length / 2 + (i + 0.5) * (length / postCount);
+    for (const side of [-1, 1]) {
+      for (const dir of [-1, 1]) knees.push([x + dir * 0.32, EAVES - 0.42, side * (HALF_WIDTH - 0.08), 0, 0, dir * 0.8]);
+    }
+    // lanterns hang from every fourth tie beam
+    if (i % 4 === 2) {
+      lanterns.push([x, EAVES - 0.75, 0]);
+      chains.push([x, EAVES - 0.35, 0]);
+    }
+  }
+  g.add(instances(new THREE.BoxGeometry(0.1, 0.9, 0.1), materials.wood, knees));
+  g.add(instances(new THREE.CylinderGeometry(0.12, 0.16, 0.34, 6), materials.glow, lanterns));
+  g.add(instances(new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4), materials.iron, chains));
 
   // shingled gable roof with a ridge cap
   for (const side of [-1, 1]) {
@@ -258,6 +277,9 @@ export function createLandmarks(scene: THREE.Scene, obstacles: ObstacleIndex, wi
     leaves: toon('#3f7a2e'),
     flowers: toon('#ffffff'),
     painting,
+    deck: striped(WOOD_DARK, 0, 0.3, 0.3, 0.1),
+    glow: windows,
+    iron: toon('#2a2a2a'),
   };
   let seed = 11;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

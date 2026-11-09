@@ -86,60 +86,165 @@ interface Walker {
   d: number;
   speed: number;
   side: number;
+  scale: number;
+  stride: number;
   phase: number;
+  /** Seconds left standing still (tourists taking a photo). */
+  pause: number;
+  pack: boolean;
+  dog: boolean;
+}
+
+/** Limb geometry hanging down from its pivot (hip or shoulder) at the origin. */
+function limb(top: number, bottom: number, length: number, foot?: string) {
+  const parts = [colored(new THREE.CylinderGeometry(top, bottom, length, 6), '#ffffff', at(0, -length / 2, 0))];
+  if (foot) parts.push(colored(new THREE.BoxGeometry(0.11, 0.07, 0.24), foot, at(0, -length - 0.02, 0.05)));
+  return mergeGeometries(parts);
 }
 
 function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => number) {
-  const body = mergeGeometries([
-    colored(new THREE.CapsuleGeometry(0.2, 0.75, 2, 6), '#ffffff', at(0, 0.6, 0)),
-    colored(new THREE.CylinderGeometry(0.09, 0.09, 0.45, 5), '#2f3540', at(-0.1, 0.22, 0)),
-    colored(new THREE.CylinderGeometry(0.09, 0.09, 0.45, 5), '#2f3540', at(0.1, 0.22, 0)),
+  // body parts, all tinted per person with instance colours
+  const torsoGeo = mergeGeometries([
+    colored(new THREE.CylinderGeometry(0.19, 0.16, 0.56, 7), '#ffffff', scaled(0, 1.24, 0, 1.15, 1, 0.75)),
+    colored(new THREE.SphereGeometry(0.075, 6, 4), '#e8c4a0', at(0, 1.55, 0)),
   ]);
-  const head = colored(new THREE.SphereGeometry(0.13, 8, 6), '#e8c4a0', at(0, 1.38, 0));
-  const torsos = new THREE.InstancedMesh(body, vertexColored(), count);
-  const heads = new THREE.InstancedMesh(head, vertexColored(), count);
-  torsos.frustumCulled = heads.frustumCulled = false;
-  const clothes = ['#c0392b', '#2e86c1', '#f1c40f', '#27ae60', '#8e44ad', '#ecf0f1', '#34495e', '#e67e22', '#16a085', '#d35400', '#7f8c8d', '#1abc9c'];
-  const skin = ['#f1d0b0', '#e8c4a0', '#c99a72', '#8d5a3b', '#f5dcc2'];
+  const hipsGeo = colored(new THREE.CylinderGeometry(0.17, 0.16, 0.2, 7), '#ffffff', scaled(0, 0.9, 0, 1.15, 1, 0.75));
+  const headGeo = colored(new THREE.SphereGeometry(0.115, 10, 8), '#ffffff', scaled(0, 1.7, 0, 0.92, 1.05, 0.98));
+  const hairGeo = colored(new THREE.SphereGeometry(0.125, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), '#ffffff', at(0, 1.72, -0.012, -0.2, 0, 0));
+  const legGeo = limb(0.075, 0.055, 0.82, '#2a2a2a');
+  const armGeo = mergeGeometries([
+    colored(new THREE.CylinderGeometry(0.055, 0.045, 0.56, 6), '#ffffff', at(0, -0.28, 0)),
+  ]);
+  const handGeo = colored(new THREE.SphereGeometry(0.05, 6, 4), '#ffffff', at(0, -0.6, 0));
+  const packGeo = mergeGeometries([
+    colored(new THREE.BoxGeometry(0.3, 0.4, 0.16), '#ffffff', at(0, 1.25, -0.2)),
+    colored(new THREE.BoxGeometry(0.26, 0.12, 0.05), '#222222', at(0, 1.12, -0.29)),
+  ]);
+  const dogGeo = mergeGeometries([
+    colored(new THREE.BoxGeometry(0.22, 0.2, 0.55), '#ffffff', at(0, 0.38, 0)),
+    colored(new THREE.BoxGeometry(0.17, 0.17, 0.2), '#ffffff', at(0, 0.52, 0.34)),
+    colored(new THREE.BoxGeometry(0.08, 0.07, 0.1), '#1a1a1a', at(0, 0.49, 0.47)),
+    ...[-0.08, 0.08].flatMap((x) => [-0.2, 0.2].map((z) => colored(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 4), '#ffffff', at(x, 0.15, z)))),
+    colored(new THREE.CylinderGeometry(0.02, 0.03, 0.22, 4), '#ffffff', at(0, 0.5, -0.33, -0.8, 0, 0)),
+  ]);
 
-  // walk routes near the centre; the Kapellbrücke always gets its share
+  const mesh = (geo: THREE.BufferGeometry, n: number) => {
+    const m = new THREE.InstancedMesh(geo, vertexColored(), n);
+    m.frustumCulled = false;
+    scene.add(m);
+    return m;
+  };
+  const torsos = mesh(torsoGeo, count);
+  const hips = mesh(hipsGeo, count);
+  const heads = mesh(headGeo, count);
+  const hair = mesh(hairGeo, count);
+  const legs = mesh(legGeo, count * 2);
+  const arms = mesh(armGeo, count * 2);
+  const hands = mesh(handGeo, count * 2);
+  const packs = mesh(packGeo, count);
+  const dogs = mesh(dogGeo, count);
+  addHull(torsos, 0.02);
+
+  const tops = ['#c0392b', '#2e86c1', '#f1c40f', '#27ae60', '#8e44ad', '#ecf0f1', '#34495e', '#e67e22', '#16a085', '#d35400', '#7f8c8d', '#1abc9c', '#e84393', '#6c5ce7', '#fdcb6e', '#ffffff'];
+  const bottoms = ['#2f3540', '#3b4a6b', '#1e272e', '#6d4c41', '#7f8c8d', '#2d3436', '#b2bec3', '#4a69bd'];
+  const skins = ['#f1d0b0', '#e8c4a0', '#c99a72', '#8d5a3b', '#f5dcc2', '#a8714a'];
+  const hairs = ['#2d1b0e', '#5a3a1e', '#a0703a', '#e0c070', '#1a1a1a', '#8a8a8a', '#b5502a'];
+  const packColors = ['#2e86c1', '#c0392b', '#2d3436', '#27ae60', '#f39c12'];
+  const dogColors = ['#c8a36a', '#3a2a1a', '#f0e6d8', '#8a5a3a'];
+
   const near = routes.filter((r) => r.length > 8 && r.pts.some((p) => Math.hypot(p.x, p.z) < 500));
   const bridge = routes.filter((r) => r.name === 'Kapellbrücke');
   const pool = near.flatMap((r) => Array(Math.ceil(r.length / 25)).fill(r) as Route[]);
   const walkers: Walker[] = [];
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   for (let i = 0; i < count; i++) {
     const route = bridge.length && i < count * 0.08 ? bridge[i % bridge.length] : pool[Math.floor(rand() * pool.length)];
-    walkers.push({
+    const child = rand() < 0.12;
+    const scale = child ? 0.6 + rand() * 0.15 : 0.9 + rand() * 0.18;
+    const w: Walker = {
       route,
       d: rand() * route.length,
-      speed: (1.0 + rand() * 0.5) * (rand() < 0.5 ? -1 : 1),
+      speed: (child ? 1.1 : 1.0 + rand() * 0.5) * (rand() < 0.5 ? -1 : 1),
       // pedestrians stay at the edges of car roads, anywhere on lanes and paths
       side: route.kind === 'car' ? (rand() < 0.5 ? -1 : 1) * (route.width / 2 + 0.9) : (rand() - 0.5) * route.width * 0.7,
+      scale,
+      stride: 0.72 * scale,
       phase: rand() * 10,
-    });
-    torsos.setColorAt(i, new THREE.Color(clothes[Math.floor(rand() * clothes.length)]));
-    heads.setColorAt(i, new THREE.Color(skin[Math.floor(rand() * skin.length)]));
+      pause: 0,
+      pack: rand() < 0.3,
+      dog: !child && rand() < 0.06,
+    };
+    walkers.push(w);
+    const top = new THREE.Color(tops[Math.floor(rand() * tops.length)]);
+    const bottom = new THREE.Color(bottoms[Math.floor(rand() * bottoms.length)]);
+    const skin = new THREE.Color(skins[Math.floor(rand() * skins.length)]);
+    torsos.setColorAt(i, top);
+    hips.setColorAt(i, bottom);
+    heads.setColorAt(i, skin);
+    hair.setColorAt(i, new THREE.Color(hairs[Math.floor(rand() * hairs.length)]));
+    for (const k of [0, 1]) {
+      legs.setColorAt(i * 2 + k, bottom);
+      arms.setColorAt(i * 2 + k, top);
+      hands.setColorAt(i * 2 + k, skin);
+    }
+    packs.setColorAt(i, new THREE.Color(packColors[Math.floor(rand() * packColors.length)]));
+    dogs.setColorAt(i, new THREE.Color(dogColors[Math.floor(rand() * dogColors.length)]));
+    if (!w.pack) packs.setMatrixAt(i, zero);
+    if (!w.dog) dogs.setMatrixAt(i, zero);
   }
-  scene.add(torsos, heads);
 
-  return (dt: number, time: number) => {
+  const base = new THREE.Matrix4();
+  const part = new THREE.Matrix4();
+  const tmp = new THREE.Matrix4();
+  const limbAt = (x: number, y: number, z: number, swing: number) =>
+    tmp.multiplyMatrices(base, part.compose(P.set(x, y, z), Q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), swing), S.set(1, 1, 1)));
+
+  return (dt: number) => {
     walkers.forEach((w, i) => {
-      w.d += w.speed * dt;
-      if (w.d < 0 || w.d > w.route.length) {
-        w.speed = -w.speed;
-        w.d = Math.min(w.route.length, Math.max(0, w.d));
+      let moving = true;
+      if (w.pause > 0) {
+        w.pause -= dt;
+        moving = false;
+      } else {
+        w.d += w.speed * dt;
+        if (w.d < 0 || w.d > w.route.length) {
+          w.speed = -w.speed;
+          w.d = Math.min(w.route.length, Math.max(0, w.d));
+        }
+        // now and then a tourist stops for a picture
+        if (w.pack && Math.random() < dt * 0.02) w.pause = 3 + Math.random() * 5;
       }
       along(w.route, w.d, P, D);
       if (w.speed < 0) D.negate();
       P.x += -D.z * w.side;
       P.z += D.x * w.side;
-      P.y += Math.abs(Math.sin(time * 6 + w.phase)) * 0.05 - (w.route.name === 'Kapellbrücke' ? 0 : 0.15);
-      Q.setFromAxisAngle(UP, Math.atan2(D.x, D.z));
-      M.compose(P, Q, S.set(1, 1, 1));
-      torsos.setMatrixAt(i, M);
-      heads.setMatrixAt(i, M);
+      const walkPhase = (w.d / w.stride) * Math.PI + w.phase;
+      const swing = moving ? Math.sin(walkPhase) * 0.5 : 0;
+      P.y += (moving ? Math.abs(Math.cos(walkPhase)) * 0.04 : 0) - (w.route.name === 'Kapellbrücke' ? 0 : 0.15);
+      // standing tourists turn sideways, towards the view
+      const yaw = Math.atan2(D.x, D.z) + (moving ? 0 : Math.PI / 2);
+      base.compose(P, Q.setFromAxisAngle(UP, yaw), S.set(w.scale, w.scale, w.scale));
+      torsos.setMatrixAt(i, base);
+      hips.setMatrixAt(i, base);
+      heads.setMatrixAt(i, base);
+      hair.setMatrixAt(i, base);
+      if (w.pack) packs.setMatrixAt(i, base);
+      legs.setMatrixAt(i * 2, limbAt(-0.09, 0.86, 0, swing));
+      legs.setMatrixAt(i * 2 + 1, limbAt(0.09, 0.86, 0, -swing));
+      // arms swing against the legs; a standing tourist holds the phone up
+      const photo = !moving && w.pack;
+      arms.setMatrixAt(i * 2, limbAt(-0.24, 1.48, 0, -swing * 0.8));
+      hands.setMatrixAt(i * 2, tmp);
+      arms.setMatrixAt(i * 2 + 1, limbAt(0.24, 1.48, 0, photo ? -1.4 : swing * 0.8));
+      hands.setMatrixAt(i * 2 + 1, tmp);
+      if (w.dog) {
+        // the dog trots a step ahead on the leash side
+        part.compose(P.set(0.6, 0, 0.9), Q.identity(), S.set(1 / w.scale, 1 / w.scale, 1 / w.scale));
+        tmp.multiplyMatrices(base, part);
+        dogs.setMatrixAt(i, tmp);
+      }
     });
-    torsos.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
+    for (const m of [torsos, hips, heads, hair, legs, arms, hands, packs, dogs]) m.instanceMatrix.needsUpdate = true;
   };
 }
 
