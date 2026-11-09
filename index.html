@@ -33,20 +33,11 @@
     </aside>
 
     <section class="hud" aria-label="Fluganzeige">
-      <div class="battery">
-        <div class="battery-bar"><div id="battery-fill"></div></div>
-        <span id="battery-text">100 %</span>
-      </div>
-      <dl>
-        <dt>Höhe</dt><dd id="hud-alt">0 m</dd>
-        <dt>Tempo</dt><dd id="hud-speed">0 km/h</dd>
-        <dt>Wind</dt><dd><span id="wind-arrow" class="wind-arrow">↑</span> <span id="hud-wind">0 m/s</span></dd>
-        <dt>Start</dt><dd id="hud-home">0 m</dd>
-        <dt>Modus</dt><dd id="hud-mode">Assist</dd>
-        <dt>Zeit</dt><dd id="hud-time">10:00</dd>
-        <dt>Konto</dt><dd id="hud-money">CHF 0</dd>
-        <dt>Ruf</dt><dd id="hud-rep">0</dd>
-      </dl>
+      <span class="hud-item" title="Akku">
+        <span class="battery-bar"><i id="battery-fill"></i></span><b id="battery-text">100 %</b>
+      </span>
+      <span class="hud-item" title="Höhe über Boden"><small>Höhe</small><b id="hud-alt">0 m</b></span>
+      <span class="hud-item" title="Wind"><span id="wind-arrow" class="wind-arrow">↑</span><b id="hud-wind">0 m/s</b></span>
     </section>
 
     <div id="viewfinder" class="viewfinder" hidden>
@@ -63,7 +54,7 @@
     <div id="toast" class="toast" role="status" hidden></div>
 
     <aside class="help help-keyboard flight-only">
-      <b>Tastatur</b> W A S D bewegen · Q E / ← → drehen · Leertaste / Shift steigen, sinken<br />
+      <b>Tastatur</b> (H blendet aus) W A S D bewegen · Q E / ← → drehen · Leertaste / Shift steigen, sinken<br />
       C Kamera · M Studio · Tab Album · Esc Menü · P Assist/Pro · R zum Start · T Tageszeit
     </aside>
     <aside class="help help-keyboard camera-only">
@@ -79,20 +70,33 @@
     </aside>
 
     <div id="touch" class="touch">
-      <div class="stick left"><div class="knob"></div><span>Bewegen</span></div>
-      <div class="stick right"><div class="knob"></div><span>Drehen · Höhe</span></div>
-      <div class="touch-buttons">
-        <button id="btn-camera" type="button">Kamera</button>
-        <button id="btn-album" type="button">Album</button>
-        <button id="btn-mode" class="flight-only" type="button">Assist</button>
-        <button id="btn-home" class="flight-only" type="button">Start</button>
-        <button id="btn-grid" class="camera-only" type="button">Raster</button>
-        <button id="btn-orient" class="camera-only" type="button">Hoch/Quer</button>
-        <button id="btn-time" type="button">Zeit</button>
-        <button id="btn-menu" type="button">Menü</button>
+      <div class="stick left flight-only"><div class="knob"></div><span>Bewegen</span></div>
+      <div class="stick right flight-only"><div class="knob"></div><span>Drehen · Höhe</span></div>
+      <button id="btn-menu" class="round-btn menu-btn" type="button" aria-label="Menü">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <button id="btn-camera" class="cam-btn flight-only" type="button" aria-label="Kamera">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.6-2.2h6.8L17 8h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button id="btn-cam-exit" class="round-btn exit-btn camera-only" type="button" aria-label="Zurück zum Fliegen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="cam-tools camera-only">
+        <button id="btn-grid" class="round-btn" type="button" aria-label="Raster">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v16M15 4v16M4 9h16M4 15h16" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <button id="btn-orient" class="round-btn" type="button" aria-label="Hoch- oder Querformat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 15a8 8 0 0 0 5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+      <div class="zoom-chips camera-only">
+        <button type="button" data-zoom="1">1×</button>
+        <button type="button" data-zoom="2">2×</button>
+        <button type="button" data-zoom="3">3×</button>
       </div>
       <button id="btn-shutter" class="shutter camera-only" type="button" aria-label="Auslösen"></button>
-      <p class="rotate-hint">Tipp: Handy quer halten</p>
+      <p class="cam-hint camera-only">Ziehen zum Ausrichten · zwei Finger zum Zoomen</p>
+      <p class="rotate-hint flight-only">Tipp: Handy quer halten</p>
     </div>
 
     <section id="rating" class="rating" hidden aria-label="Bewertung">
@@ -132,11 +136,14 @@
         <svg class="menu-logo" viewBox="0 0 200 200" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M52 140V60L100 132L150 60"/><path d="M124 96L150 140"/></g></svg>
         <h1>MKPHOTO</h1>
         <p class="menu-claim">Drohnenfotografie Schweiz</p>
+        <p id="menu-wallet" class="menu-wallet" hidden></p>
         <div id="menu-main" class="menu-buttons">
           <button id="menu-play" type="button" data-action="play">Spiel starten</button>
           <button id="menu-new" type="button" data-action="newGame" hidden>Neues Spiel</button>
           <button type="button" data-action="studio">Studio · Aufträge</button>
           <button type="button" data-action="album">Fotoalbum</button>
+          <button id="menu-home" type="button" data-action="home" hidden>Zurück zum Start</button>
+          <button id="menu-time" type="button" data-action="time" hidden>Zeit vorspulen</button>
           <button type="button" data-action="options">Optionen</button>
         </div>
         <div id="menu-options" class="menu-buttons" hidden>

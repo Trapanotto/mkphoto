@@ -21,6 +21,7 @@ export interface InputState {
   studio: boolean;
   menu: boolean;
   toggleOrientation: boolean;
+  help: boolean;
   /** Photo camera axes: turn, tilt the gimbal, zoom. */
   camYaw: number;
   camTilt: number;
@@ -39,7 +40,8 @@ export type Action =
   | 'back'
   | 'studio'
   | 'menu'
-  | 'toggleOrientation';
+  | 'toggleOrientation'
+  | 'help';
 
 const KEY_ACTIONS: Record<string, Action> = {
   KeyP: 'toggleMode',
@@ -55,6 +57,7 @@ const KEY_ACTIONS: Record<string, Action> = {
   Escape: 'back',
   KeyM: 'studio',
   KeyV: 'toggleOrientation',
+  KeyH: 'help',
 };
 
 const DEADZONE = 0.15;
@@ -114,6 +117,7 @@ export class Input {
       studio: this.pending.has('studio'),
       menu: this.pending.has('menu'),
       toggleOrientation: this.pending.has('toggleOrientation'),
+      help: this.pending.has('help'),
       camYaw: k('KeyD', 'KeyE', 'ArrowRight') - k('KeyA', 'KeyQ', 'ArrowLeft'),
       camTilt: k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown'),
       camZoom: k('Equal', 'NumpadAdd', 'BracketRight') - k('Minus', 'NumpadSubtract', 'Slash'),

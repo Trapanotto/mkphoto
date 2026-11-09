@@ -1,6 +1,6 @@
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset';
+export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home' | 'time';
 
 /** Title screen and pause menu. The game keeps rendering behind it. */
 export class MainMenu {
@@ -26,6 +26,15 @@ export class MainMenu {
     const play = $('menu-play');
     play.textContent = started ? 'Weiterspielen' : hasSave ? 'Weiterspielen' : 'Spiel starten';
     $('menu-new').hidden = !hasSave && !started;
+  }
+
+  /** Money and reputation, plus the in-game shortcuts once a game runs. */
+  setGame(wallet: string | null, started: boolean) {
+    const w = $('menu-wallet');
+    w.textContent = wallet ?? '';
+    w.hidden = !wallet;
+    $('menu-home').hidden = !started;
+    $('menu-time').hidden = !started;
   }
 
   setLabels(quality: string, mode: string) {

@@ -5,6 +5,7 @@ import { loadBuildings3d } from './buildings3d';
 import { chf, feeFor, levelOf, loadAssignments, reputationFor, type Assignment } from './assignments';
 import { Drone, type FlightInput } from './drone';
 import { FollowCamera } from './followCamera';
+import { CameraDrag } from './cameraDrag';
 import { Hud } from './hud';
 import { Input, type Action } from './input';
 import { Intro, MainMenu } from './menu';
@@ -105,8 +106,7 @@ async function start() {
 
   function updateWallet() {
     const lv = levelOf(game.reputation);
-    $('hud-money').textContent = chf(game.money);
-    $('hud-rep').textContent = `${game.reputation} · ${lv.name}`;
+    menu.setGame(started || hasSave ? `${chf(game.money)} · ${game.reputation} Ruf · ${lv.name}` : null, started);
   }
 
   studio.onAccept = (job) => {
@@ -164,6 +164,8 @@ async function start() {
   function beginPlay() {
     menu.close();
     started = true;
+    updateWallet();
+    showHelp(true);
     if (!game.introSeen) {
       intro.open();
       return;
@@ -212,6 +214,16 @@ async function start() {
         save();
         syncMenuLabels();
         break;
+      case 'home':
+        drone.reset();
+        follow.snap(drone);
+        menu.close();
+        break;
+      case 'time':
+        clock.skip();
+        menu.close();
+        showToast(`Zeit: ${clock.label}`);
+        break;
     }
   };
   menu.setHasSave(hasSave, false);
@@ -221,15 +233,12 @@ async function start() {
   // --- Buttons -------------------------------------------------------------------
 
   const buttons: [string, Action][] = [
-    ['btn-mode', 'toggleMode'],
-    ['btn-home', 'home'],
-    ['btn-time', 'skipTime'],
     ['btn-menu', 'menu'],
     ['btn-camera', 'toggleCamera'],
+    ['btn-cam-exit', 'toggleCamera'],
     ['btn-shutter', 'shoot'],
     ['btn-grid', 'cycleGrid'],
     ['btn-orient', 'toggleOrientation'],
-    ['btn-album', 'album'],
   ];
   for (const [id, action] of buttons) {
     const button = $(id);
@@ -237,22 +246,33 @@ async function start() {
     button.addEventListener('click', () => input.trigger(action));
   }
   $('brief').addEventListener('click', () => studio.open());
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.zoom-chips button')) {
+    b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    b.addEventListener('click', () => photo.setZoom(Number(b.dataset.zoom)));
+  }
+  // dragging the view in the photo camera: the touch layer on phones, the canvas with a mouse
+  const drag = new CameraDrag([$('touch'), canvas], () => photo.active && !album.isOpen && !ratingCard.isOpen);
 
   // iOS Safari: block pinch-zoom of the page
   document.addEventListener('gesturestart', (e) => e.preventDefault());
 
   // --- Modes --------------------------------------------------------------------
 
-  const stickLeft = document.querySelector('.stick.left span')!;
-  const stickRight = document.querySelector('.stick.right span')!;
   function setCamera(on: boolean) {
     photo.setActive(on);
     drone.group.visible = !on;
     follow.wheelEnabled = !on;
-    stickLeft.textContent = on ? 'Zoom' : 'Bewegen';
-    stickRight.textContent = on ? 'Drehen · Neigen' : 'Drehen · Höhe';
-    $('btn-camera').textContent = on ? 'Fliegen' : 'Kamera';
+    drag.take();
   }
+
+  // keyboard help shows for the first seconds of play, then H brings it back
+  let helpTimer = 0;
+  function showHelp(on: boolean) {
+    document.body.dataset.help = on ? 'on' : 'off';
+    clearTimeout(helpTimer);
+    if (on) helpTimer = window.setTimeout(() => (document.body.dataset.help = 'off'), 15000);
+  }
+  if (new URLSearchParams(location.search).has('debug')) document.body.dataset.debug = 'on';
   setCamera(false);
 
   const toast = $('toast');
@@ -351,6 +371,7 @@ async function start() {
       album.close();
       if (photo.active) setCamera(false);
       menu.setHasSave(hasSave, started);
+      updateWallet();
       save();
       menu.open();
     }
@@ -397,7 +418,16 @@ async function start() {
       // the drone holds its position; slower turning at long focal lengths for precise framing
       const turn = c.camYaw * 0.45 * (24 / photo.focal);
       drone.update(dt, { ...idle, yaw: turn }, still, world);
+      // dragged pixels turn the view so the scene follows the finger
+      const d = drag.take();
+      const perPixel = THREE.MathUtils.degToRad(photo.camera.fov) / window.innerHeight;
+      drone.yaw += d.dx * perPixel;
+      photo.tiltBy(d.dy * perPixel);
+      if (d.zoom) photo.zoomBy(d.zoom);
       photo.update(dt, { tilt: c.camTilt, zoom: c.camZoom }, drone);
+      for (const b of document.querySelectorAll<HTMLElement>('.zoom-chips button')) {
+        b.classList.toggle('active', Math.abs(photo.zoomFactor - Number(b.dataset.zoom)) < 0.25);
+      }
       view = photo.camera;
       if (time - lastMarks > 100) {
         lastMarks = time;
@@ -475,7 +505,8 @@ async function start() {
       save();
     }
     quality.frame(now);
-    hud.update(now, drone, localWind, view, input.device, clock.label);
+    hud.update(now, drone, localWind, view, input.device);
+    if (c.help) showHelp(document.body.dataset.help !== 'on');
     updateStats(now);
   });
 }

@@ -81,6 +81,20 @@ export class PhotoCamera {
     this.frameEl.dataset.grid = this.grid;
   }
 
+  /** Tilt by an angle in radians (dragging the view). */
+  tiltBy(angle: number) {
+    this.gimbal = THREE.MathUtils.clamp(this.gimbal + angle, GIMBAL_MIN, GIMBAL_MAX);
+  }
+
+  /** Jump to a zoom step: 1×, 2×, 3×. */
+  setZoom(factor: number) {
+    this.focal = THREE.MathUtils.clamp(MIN_FOCAL * factor, MIN_FOCAL, MAX_FOCAL);
+  }
+
+  get zoomFactor() {
+    return this.focal / MIN_FOCAL;
+  }
+
   zoomBy(amount: number) {
     this.focal = THREE.MathUtils.clamp(this.focal * Math.exp(amount), MIN_FOCAL, MAX_FOCAL);
   }

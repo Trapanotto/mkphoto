@@ -27,7 +27,8 @@ export class TouchSticks {
     };
 
     layer.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse') return;
+      // in the photo camera the whole screen drags the view instead
+      if (e.pointerType === 'mouse' || document.body.dataset.mode === 'camera') return;
       const side: Side = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
       if (this.ids[side] !== null) return;
       e.preventDefault();

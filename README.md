@@ -23,16 +23,17 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 | Steigen / Sinken | Leertaste / Shift | RT / LT | Rechter Stick hoch/runter |
 | Kamera neigen | – | Rechter Stick hoch/runter | – |
 | Assist / Pro | P | Y | Taste „Assist/Pro“ |
-| Zurück zum Start | R | B | Taste „Start“ |
-| Kameramodus | C | LB | Taste „Kamera“ |
+| Zurück zum Start | R | B | Menü → Zurück zum Start |
+| Kameramodus | C | LB | runder Kamera-Knopf unten |
 | Auslösen (im Kameramodus) | Leertaste | A | runder Auslöser |
-| Neigen / Zoomen (Kamera) | W S / + − oder Mausrad | Rechter Stick / RT LT | rechter / linker Daumen |
+| Ausrichten / Zoomen (Kamera) | Maus ziehen, W S / + − oder Mausrad | Rechter Stick / RT LT | Ziehen, zwei Finger, Tasten 1× 2× 3× |
 | Raster (Kamera) | F | Y | Taste „Raster“ |
 | Hoch-/Querformat (Kamera) | V | RB | Taste „Hoch/Quer“ |
-| Album | Tab | View | Taste „Album“ |
+| Album | Tab | View | Menü → Fotoalbum |
 | Studio (Aufträge) | M | – | Menü → Studio |
-| Menü | Esc | Start | Taste „Menü“ |
-| Tageszeit weiter | T | X | Taste „Zeit“ |
+| Menü | Esc | Start | ☰ oben links |
+| Hilfe ein/aus | H | – | – |
+| Tageszeit weiter | T | X | Menü → Zeit vorspulen |
 | Grafikstufe (Auto/Hoch/Mittel/Niedrig) | G | – | Menü → Optionen |
 | Zoom | Mausrad | – | – |
 

@@ -1230,3 +1230,256 @@ button.secondary {
   font-size: 13px;
   margin-right: auto;
 }
+
+/* =====================================================================
+   Lean HUD (replaces the old panel layout)
+   ===================================================================== */
+
+/* the logo lives in the menu; fps only with ?debug */
+body[data-screen='game'] .brand {
+  display: none;
+}
+
+.stats {
+  display: none;
+}
+
+body[data-debug='on'] .stats {
+  display: block;
+  top: auto;
+  bottom: 28px;
+}
+
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.hud-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-item small {
+  opacity: 0.65;
+  font-size: 11px;
+}
+
+.hud .battery-bar {
+  display: inline-block;
+  width: 30px;
+  height: 11px;
+  flex: none;
+}
+
+#battery-fill {
+  display: block;
+}
+
+body[data-mode='camera'] .hud {
+  opacity: 0.85;
+}
+
+/* keyboard help: only right after starting, or with H */
+.help {
+  display: none !important;
+}
+
+body[data-help='on'][data-device='keyboard'] .help-keyboard,
+body[data-help='on'][data-device='gamepad'] .help-gamepad {
+  display: block !important;
+}
+
+body[data-mode='flight'] .help.camera-only,
+body[data-mode='camera'] .help.flight-only {
+  display: none !important;
+}
+
+/* job: a small chip at the top left; tap opens the studio */
+.brief {
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 6;
+  width: 250px;
+}
+
+@media (pointer: coarse) {
+  .brief {
+    left: calc(max(12px, env(safe-area-inset-left)) + 56px);
+    width: auto;
+    max-width: min(46vw, 260px);
+    padding: 6px 10px;
+  }
+
+  .brief #brief-text,
+  .brief .brief-from,
+  .brief .brief-list,
+  .brief .brief-best {
+    display: none;
+  }
+
+  .brief b {
+    margin: 0;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hud {
+    gap: 10px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+/* =====================================================================
+   Touch controls: two sticks, a menu button and one big camera button
+   ===================================================================== */
+
+.touch {
+  z-index: 4;
+}
+
+.touch-buttons {
+  display: none !important;
+}
+
+.round-btn {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+.round-btn svg,
+.cam-btn svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.round-btn:active,
+.cam-btn:active {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.menu-btn,
+.exit-btn {
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+}
+
+.cam-btn {
+  position: absolute;
+  left: 50%;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  padding: 18px;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
+.cam-tools {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(30px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cam-tools .round-btn {
+  position: static;
+}
+
+.zoom-chips {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(28px, env(safe-area-inset-bottom)) + 86px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+.zoom-chips button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font: 700 13px system-ui, sans-serif;
+}
+
+.zoom-chips button.active {
+  background: #ffc531;
+  color: #111;
+}
+
+.cam-hint {
+  position: absolute;
+  left: 50%;
+  top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: fadeout 6s forwards;
+}
+
+@keyframes fadeout {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.rotate-hint {
+  bottom: 120px;
+}
+
+/* the touch layer captures drags for the camera; keep it from blocking the menu chip */
+body[data-mode='camera'] .stick {
+  display: none;
+}
+
+/* on desktop the canvas takes mouse drags in camera mode */
+body[data-mode='camera'] #scene {
+  cursor: grab;
+}
+
+/* narrow phones: job chip goes under the menu button, out of the status bar's way */
+@media (pointer: coarse) and (max-width: 600px) {
+  .brief {
+    top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+    left: max(12px, env(safe-area-inset-left));
+    max-width: 60vw;
+  }
+
+  .cam-hint {
+    top: calc(max(12px, env(safe-area-inset-top)) + 96px);
+  }
+}
