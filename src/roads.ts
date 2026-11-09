@@ -9,6 +9,10 @@ export interface Route {
   name: string | null;
   width: number;
   pts: THREE.Vector3[];
+  /** A car road with pavements beside it (people walk there, not on the verge). */
+  pavement: boolean;
+  /** Cars may use it: the main roads, and the small asphalt roads between them. */
+  drivable: boolean;
   /** Running length at each point. */
   dist: number[];
   length: number;
@@ -337,7 +341,7 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
           return [nx, nz, 1 / cos];
         });
         runs.push({ road: r, kind, color, half: cls.width / 2, lift, pts, nrm, dist, bridged: bridged.slice(s, e + 1), hasDeck });
-        routes.push({ kind: r.kind, name: r.name, width: cls.width, pts, dist, length: dist.at(-1)! });
+        routes.push({ kind: r.kind, name: r.name, width: cls.width, pavement: kind === 0 && opts.urban(mid[0], mid[1]), drivable: kind === 0 || (kind === 8 && cls.width >= 4), pts, dist, length: dist.at(-1)! });
       }
       s = e;
     }

@@ -85,15 +85,88 @@ function trees(scene: THREE.Scene, data: TreeData[], obstacles: ObstacleIndex, r
 interface Walker {
   route: Route;
   d: number;
+  /** +1 walking towards the route's end, -1 towards its start. */
+  dir: number;
   speed: number;
   side: number;
   scale: number;
   stride: number;
   phase: number;
-  /** Seconds left standing still (tourists taking a photo). */
+  /** Metres walked so far: drives the legs, also across a change of route. */
+  walked: number;
+  /** Seconds left standing still (tourists taking a photo, or turning round at a dead end). */
   pause: number;
   pack: boolean;
   dog: boolean;
+  /** Smoothed position and heading, so turning a corner is a curve and not a jump. */
+  pos: THREE.Vector3;
+  yaw: number;
+  fresh: boolean;
+}
+
+interface Link {
+  route: Route;
+  /** True if the route starts at this junction (so it is travelled forwards from here). */
+  start: boolean;
+}
+
+/**
+ * Which routes meet at each route end. next() picks the way on for someone arriving at an end,
+ * preferring to go straight; null at a dead end.
+ */
+function network(routes: Route[]) {
+  const CELL = 3;
+  const nodes = new Map<string, Link[]>();
+  const add = (p: THREE.Vector3, link: Link) => {
+    const k = `${Math.round(p.x / CELL)},${Math.round(p.z / CELL)}`;
+    (nodes.get(k) ?? nodes.set(k, []).get(k)!).push(link);
+  };
+  for (const r of routes) {
+    add(r.pts[0], { route: r, start: true });
+    add(r.pts[r.pts.length - 1], { route: r, start: false });
+  }
+  const links = (route: Route, atEnd: boolean, ok: (r: Route) => boolean) => {
+    const n = route.pts.length;
+    const p = atEnd ? route.pts[n - 1] : route.pts[0];
+    const out: Link[] = [];
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++)
+        for (const l of nodes.get(`${Math.round(p.x / CELL) + dx},${Math.round(p.z / CELL) + dz}`) ?? []) {
+          if (l.route === route || !ok(l.route)) continue;
+          const q = l.start ? l.route.pts[0] : l.route.pts[l.route.pts.length - 1];
+          if (Math.hypot(q.x - p.x, q.z - p.z) < 4) out.push(l);
+        }
+    return out;
+  };
+  const next = (route: Route, atEnd: boolean, ok: (r: Route) => boolean): Link | null => {
+    const list = links(route, atEnd, ok);
+    if (!list.length) return null;
+    const n = route.pts.length;
+    const a = atEnd ? route.pts[n - 2] : route.pts[1];
+    const b = atEnd ? route.pts[n - 1] : route.pts[0];
+    const hx = b.x - a.x, hz = b.z - a.z;
+    const hl = Math.hypot(hx, hz) || 1;
+    // straight on is likeliest, a sharp turn back the least
+    const weights = list.map((l) => {
+      const m = l.route.pts.length;
+      const c = l.start ? l.route.pts[0] : l.route.pts[m - 1];
+      const e = l.start ? l.route.pts[1] : l.route.pts[m - 2];
+      const dot = ((e.x - c.x) * hx + (e.z - c.z) * hz) / (hl * (Math.hypot(e.x - c.x, e.z - c.z) || 1));
+      return 0.15 + Math.max(0, dot + 0.3) ** 2;
+    });
+    let pick = Math.random() * weights.reduce((x, y) => x + y, 0);
+    for (let i = 0; i < list.length; i++) if ((pick -= weights[i]) <= 0) return list[i];
+    return list[list.length - 1];
+  };
+  return { links, next };
+}
+
+/** Turns an angle towards another by the shortest way. */
+function turnTo(from: number, to: number, share: number) {
+  let diff = (to - from) % (Math.PI * 2);
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  return from + diff * share;
 }
 
 /** Limb geometry hanging down from its pivot (hip or shoulder) at the origin. */
@@ -153,7 +226,11 @@ function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => 
   const packColors = ['#2e86c1', '#c0392b', '#2d3436', '#27ae60', '#f39c12'];
   const dogColors = ['#c8a36a', '#3a2a1a', '#f0e6d8', '#8a5a3a'];
 
-  const near = routes.filter((r) => r.length > 8 && r.pts.some((p) => Math.hypot(p.x, p.z) < nearRadius));
+  // people keep to paths, lanes and pavements; a road without a pavement is not for walking
+  const walkable = (r: Route) => r.kind === 'walk' || r.pavement || r.name === 'Kapellbrücke';
+  const net = network(routes);
+  const sideFor = (route: Route, sign: number) => (route.kind === 'car' ? sign * (route.width / 2 + 1.1) : (Math.random() - 0.5) * route.width * 0.7);
+  const near = routes.filter((r) => walkable(r) && r.length > 8 && r.pts.some((p) => Math.hypot(p.x, p.z) < nearRadius));
   const bridge = routes.filter((r) => r.name === 'Kapellbrücke');
   const pool = near.flatMap((r) => Array(Math.ceil(r.length / 25)).fill(r) as Route[]);
   if (!pool.length) count = 0;
@@ -166,9 +243,14 @@ function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => 
     const w: Walker = {
       route,
       d: rand() * route.length,
-      speed: (child ? 1.1 : 1.0 + rand() * 0.5) * (rand() < 0.5 ? -1 : 1),
-      // pedestrians stay at the edges of car roads, anywhere on lanes and paths
-      side: route.kind === 'car' ? (rand() < 0.5 ? -1 : 1) * (route.width / 2 + 0.9) : (rand() - 0.5) * route.width * 0.7,
+      dir: rand() < 0.5 ? -1 : 1,
+      speed: child ? 1.1 : 1.0 + rand() * 0.5,
+      // pedestrians stay on the pavements of car roads, anywhere on lanes and paths
+      side: route.kind === 'car' ? (rand() < 0.5 ? -1 : 1) * (route.width / 2 + 1.1) : (rand() - 0.5) * route.width * 0.7,
+      walked: 0,
+      pos: new THREE.Vector3(),
+      yaw: 0,
+      fresh: true,
       scale,
       stride: 0.72 * scale,
       phase: rand() * 10,
@@ -202,29 +284,66 @@ function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => 
     tmp.multiplyMatrices(base, part.compose(P.set(x, y, z), Q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), swing), S.set(1, 1, 1)));
 
   return (dt: number) => {
+    const ease = 1 - Math.exp(-dt * 5);
     walkers.forEach((w, i) => {
       let moving = true;
       if (w.pause > 0) {
         w.pause -= dt;
         moving = false;
       } else {
-        w.d += w.speed * dt;
+        w.d += w.dir * w.speed * dt;
+        w.walked += w.speed * dt;
         if (w.d < 0 || w.d > w.route.length) {
-          w.speed = -w.speed;
-          w.d = Math.min(w.route.length, Math.max(0, w.d));
+          // at the end of this stretch: carry on round the corner, or turn back at a dead end
+          const over = w.d < 0 ? -w.d : w.d - w.route.length;
+          const link = net.next(w.route, w.d > 0, walkable);
+          if (link) {
+            const sign = Math.sign(w.side) || 1;
+            w.route = link.route;
+            w.dir = link.start ? 1 : -1;
+            w.d = link.start ? over : link.route.length - over;
+            w.side = sideFor(link.route, sign);
+          } else {
+            w.dir = -w.dir;
+            w.d = Math.min(w.route.length, Math.max(0, w.d));
+            w.pause = 1 + Math.random() * 2;
+          }
         }
         // now and then a tourist stops for a picture
         if (w.pack && Math.random() < dt * 0.02) w.pause = 3 + Math.random() * 5;
       }
       along(w.route, w.d, P, D);
-      if (w.speed < 0) D.negate();
+      if (w.dir < 0) D.negate();
       P.x += -D.z * w.side;
       P.z += D.x * w.side;
-      const walkPhase = (w.d / w.stride) * Math.PI + w.phase;
+      // feet on the ground: the pavement beside a road, the path itself, or a bridge deck
+      if (w.route.kind === 'car' && w.route.name !== 'Kapellbrücke') {
+        const ground = heightAt(P.x, P.z);
+        if (P.y - ground < 1.2) P.y = ground + (w.route.pavement ? 0.36 : 0.05);
+      }
+      if (w.fresh) {
+        w.pos.copy(P);
+        w.yaw = Math.atan2(D.x, D.z);
+        w.fresh = false;
+      } else {
+        // catch up with the spot on the route at a brisk walk at most: corners are cut, never slid across
+        const gx = P.x - w.pos.x, gz = P.z - w.pos.z;
+        const gap = Math.hypot(gx, gz);
+        const reach = gap > 8 ? gap : Math.min(gap, w.speed * 1.7 * dt + gap * ease * 0.15);
+        // never a step backwards: where the next stretch starts a little behind, wait for it to come past
+        if (gap > 1e-4 && !(gx * D.x + gz * D.z < 0 && gap < 0.8)) {
+          w.pos.x += (gx / gap) * reach;
+          w.pos.z += (gz / gap) * reach;
+        }
+        w.pos.y += (P.y - w.pos.y) * Math.min(1, ease * 2);
+      }
+      P.copy(w.pos);
+      const walkPhase = (w.walked / w.stride) * Math.PI + w.phase;
       const swing = moving ? Math.sin(walkPhase) * 0.5 : 0;
-      P.y += (moving ? Math.abs(Math.cos(walkPhase)) * 0.04 : 0) - (w.route.name === 'Kapellbrücke' ? 0 : 0.15);
+      P.y += moving ? Math.abs(Math.cos(walkPhase)) * 0.04 : 0;
       // standing tourists turn sideways, towards the view
-      const yaw = Math.atan2(D.x, D.z) + (moving ? 0 : Math.PI / 2);
+      w.yaw = turnTo(w.yaw, Math.atan2(D.x, D.z) + (moving || !w.pack ? 0 : Math.PI / 2), 1 - Math.exp(-dt * 6));
+      const yaw = w.yaw;
       base.compose(P, Q.setFromAxisAngle(UP, yaw), S.set(w.scale, w.scale, w.scale));
       torsos.setMatrixAt(i, base);
       hips.setMatrixAt(i, base);
@@ -255,8 +374,15 @@ function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => 
 interface Car {
   route: Route;
   d: number;
-  speed: number;
+  /** +1 driving towards the route's end, -1 towards its start. */
+  dir: number;
+  /** Current speed and the speed this driver likes on a clear road, m/s. */
+  v: number;
+  cruise: number;
   bus: boolean;
+  pos: THREE.Vector3;
+  yaw: number;
+  fresh: boolean;
 }
 
 function traffic(scene: THREE.Scene, routes: Route[], count: number, rand: () => number) {
@@ -270,13 +396,32 @@ function traffic(scene: THREE.Scene, routes: Route[], count: number, rand: () =>
     colored(new THREE.BoxGeometry(2.55, 0.9, 11), '#2b3440', at(0, 2.2, 0)),
     ...[-1, 1].flatMap((sx) => [-4, 4].map((z) => colored(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 8), '#1a1a1a', at(sx * 1.2, 0.5, z, 0, 0, Math.PI / 2)))),
   ]);
-  const carRoutes = routes.filter((r) => r.kind === 'car' && r.length > 30);
-  if (!carRoutes.length) return () => {};
-  const pool = carRoutes.flatMap((r) => Array(Math.ceil(r.length / 40)).fill(r) as Route[]);
+  const carRoutes = routes.filter((r) => r.drivable);
+  const long = carRoutes.filter((r) => r.kind === 'car' && r.length > 30);
+  if (!long.length) return () => {};
+  const net = network(carRoutes);
+  // the area the roads cover: only at its rim do cars leave and enter
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const r of carRoutes) for (const p of [r.pts[0], r.pts[r.pts.length - 1]]) (x0 = Math.min(x0, p.x)), (x1 = Math.max(x1, p.x)), (z0 = Math.min(z0, p.z)), (z1 = Math.max(z1, p.z));
+  const atRim = (p: THREE.Vector3) => p.x < x0 + 90 || p.x > x1 - 90 || p.z < z0 + 90 || p.z > z1 - 90;
+  const drivable = () => true;
+  // buses keep to the main roads
+  const forBus = (r: Route) => r.width >= 6;
+  // where roads leave the map or simply end: cars arriving there start again at another such place
+  const entries: Link[] = [];
+  for (const r of long) {
+    if (!net.links(r, false, drivable).length && atRim(r.pts[0])) entries.push({ route: r, start: true });
+    if (!net.links(r, true, drivable).length && atRim(r.pts[r.pts.length - 1])) entries.push({ route: r, start: false });
+  }
+  const pool = long.flatMap((r) => Array(Math.ceil(r.length / 40)).fill(r) as Route[]);
+  const busPool = pool.filter(forBus);
   const cars: Car[] = [];
   for (let i = 0; i < count; i++) {
-    const route = pool[Math.floor(rand() * pool.length)];
-    cars.push({ route, d: rand() * route.length, speed: (7 + rand() * 4) * (rand() < 0.5 ? -1 : 1), bus: i % 9 === 0 });
+    const bus = i % 9 === 0 && busPool.length > 0;
+    const from = bus ? busPool : pool;
+    const route = from[Math.floor(rand() * from.length)];
+    const cruise = bus ? 8 + rand() * 2 : 9 + rand() * 4;
+    cars.push({ route, d: rand() * route.length, dir: rand() < 0.5 ? -1 : 1, v: cruise, cruise, bus, pos: new THREE.Vector3(), yaw: 0, fresh: true });
   }
   const carList = cars.filter((c) => !c.bus);
   const busList = cars.filter((c) => c.bus);
@@ -290,21 +435,85 @@ function traffic(scene: THREE.Scene, routes: Route[], count: number, rand: () =>
   addHull(carMesh, 0.04);
   scene.add(carMesh, busMesh);
 
+  const D2 = new THREE.Vector3();
+  const P2 = new THREE.Vector3();
   const place = (list: Car[], mesh: THREE.InstancedMesh, dt: number) => {
     list.forEach((c, i) => {
-      c.d += c.speed * dt;
-      if (c.d < 0 || c.d > c.route.length) {
-        c.speed = -c.speed;
-        c.d = Math.min(c.route.length, Math.max(0, c.d));
-      }
+      // --- how fast: slower into bends and junctions, and never into the car in front ---
       along(c.route, c.d, P, D);
-      if (c.speed < 0) D.negate();
+      if (c.dir < 0) D.negate();
+      // slowly on the small roads between the houses
+      let target = c.route.kind === 'car' ? c.cruise : c.cruise * 0.55;
+      const ahead = c.d + c.dir * 10;
+      if (ahead > 0 && ahead < c.route.length) {
+        along(c.route, ahead, P2, D2);
+        if (c.dir < 0) D2.negate();
+        const dot = D.x * D2.x + D.z * D2.z;
+        target *= Math.min(1, Math.max(0.35, 0.35 + ((dot - 0.6) / 0.4) * 0.65));
+      } else if (net.links(c.route, c.dir > 0, drivable).length > 1) {
+        // a junction: roll up to it
+        target = Math.min(target, 5.5);
+      }
+      for (const o of cars) {
+        if (o === c || o.route !== c.route || o.dir !== c.dir) continue;
+        const gap = (o.d - c.d) * c.dir;
+        if (gap > 0 && gap < 40) target = Math.min(target, Math.max(0, gap - (o.bus || c.bus ? 15 : 8)) * 0.8);
+      }
+      c.v += Math.min(2.5 * dt, Math.max(-8 * dt, target - c.v));
+      c.d += c.dir * c.v * dt;
+
+      // --- where next at the end of this stretch ---
+      if (c.d < 0 || c.d > c.route.length) {
+        const over = c.d < 0 ? -c.d : c.d - c.route.length;
+        const ok = c.bus ? forBus : drivable;
+        let link = net.next(c.route, c.d > 0, ok) ?? (c.bus ? net.next(c.route, c.d > 0, drivable) : null);
+        let jump = false;
+        const endPoint = c.d > 0 ? c.route.pts[c.route.pts.length - 1] : c.route.pts[0];
+        if (!link && entries.length && atRim(endPoint)) {
+          // off the map: come back in somewhere else
+          link = entries[Math.floor(Math.random() * entries.length)];
+          jump = true;
+        }
+        if (link) {
+          c.route = link.route;
+          c.dir = link.start ? 1 : -1;
+          c.d = link.start ? Math.min(over, link.route.length) : Math.max(0, link.route.length - over);
+          c.fresh = jump;
+        } else {
+          // a dead end in town: stop and turn round
+          c.dir = -c.dir;
+          c.d = Math.min(c.route.length, Math.max(0, c.d));
+          c.v = 0;
+        }
+        along(c.route, c.d, P, D);
+        if (c.dir < 0) D.negate();
+      } else {
+        along(c.route, c.d, P, D);
+        if (c.dir < 0) D.negate();
+      }
       // drive on the right
       const lane = Math.min(c.route.width / 4, 1.8);
       P.x += -D.z * -lane;
       P.z += D.x * -lane;
-      Q.setFromAxisAngle(UP, Math.atan2(D.x, D.z));
-      M.compose(P, Q, S.set(1, 1, 1));
+      const heading = Math.atan2(D.x, D.z);
+      if (c.fresh) {
+        c.pos.copy(P);
+        c.yaw = heading;
+        c.fresh = false;
+      } else {
+        // eased, so a turn at a junction is driven as a curve
+        const gx = P.x - c.pos.x, gz = P.z - c.pos.z;
+        const gap = Math.hypot(gx, gz);
+        const reach = Math.min(gap, Math.max(c.v, 2) * 1.5 * dt + gap * (1 - Math.exp(-dt * 2)));
+        if (gap > 1e-4 && !(gx * D.x + gz * D.z < 0 && gap < 3)) {
+          c.pos.x += (gx / gap) * reach;
+          c.pos.z += (gz / gap) * reach;
+        }
+        c.pos.y = P.y;
+        c.yaw = turnTo(c.yaw, heading, 1 - Math.exp(-dt * (c.bus ? 3 : 5)));
+      }
+      Q.setFromAxisAngle(UP, c.yaw);
+      M.compose(c.pos, Q, S.set(1, 1, 1));
       mesh.setMatrixAt(i, M);
     });
     mesh.instanceMatrix.needsUpdate = true;
