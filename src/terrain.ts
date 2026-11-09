@@ -159,6 +159,14 @@ export interface RiverLine {
   pts: [number, number][];
 }
 
+/** Bridges, tunnels, steps and open waterways from the base map (tools/import-structures.mjs). */
+export interface Structures {
+  bridges: [number, number][][];
+  tunnels: [number, number][][];
+  steps: [number, number][][];
+  waterways: { cls: 'stream' | 'river'; width: number; dry: number; pts: [number, number][] }[];
+}
+
 export interface TerrainData {
   meta: TerrainMeta;
   rails: RailLine[];
@@ -171,6 +179,7 @@ export interface TerrainData {
   trees: TreeData[];
   /** Land cover classes from the swisstopo base map, if the region has them. */
   landcover: Landcover | null;
+  structures: Structures | null;
 }
 
 /** Old single-region files list a core and a far grid instead of a grid list. */
@@ -198,16 +207,19 @@ export async function loadTerrain(baseUrl: string, rule: WaterRule): Promise<Ter
     fetch(baseUrl + name)
       .then((r) => (r.ok ? (r.json() as Promise<T[]>) : []))
       .catch(() => [] as T[]);
-  const [buffers, roads, trees, rails, rivers, landcover] = await Promise.all([
+  const [buffers, roads, trees, rails, rivers, landcover, structures] = await Promise.all([
     Promise.all(meta.grids.map((g) => get(g.file).then((r) => r.arrayBuffer()))),
     get('roads.json').then((r) => r.json() as Promise<RoadData[]>),
     get('trees.json').then((r) => r.json() as Promise<TreeData[]>),
     optional<RailLine>('rails.json'),
     optional<RiverLine>('rivers.json'),
     loadLandcover(baseUrl).catch(() => null),
+    fetch(baseUrl + 'structures.json')
+      .then((r) => (r.ok && (r.headers.get('content-type') ?? '').includes('json') ? (r.json() as Promise<Structures>) : null))
+      .catch(() => null),
   ]);
   grids = meta.grids.map((info, i) => toGrid(buffers[i], info));
   waterRule = rule;
   waterMask = buildWaterMask(grids[0], rule);
-  return { meta, grids, core: grids[0], far: grids[grids.length - 1], roads, trees, rails, rivers, landcover };
+  return { meta, grids, core: grids[0], far: grids[grids.length - 1], roads, trees, rails, rivers, landcover, structures };
 }

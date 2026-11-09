@@ -502,6 +502,14 @@ async function start() {
     } else if (!photo.active) {
       follow.update(drone, c.camPitch, dt);
     }
+    // development only: a fixed inspection camera set from the console (mk.cam = [x, y, z, tx, ty, tz])
+    if (import.meta.env.DEV) {
+      const cam = (window as unknown as { mk?: { cam?: number[] } }).mk?.cam;
+      if (cam) {
+        camera.position.set(cam[0], cam[1], cam[2]);
+        camera.lookAt(cam[3], cam[4], cam[5]);
+      }
+    }
     drone.gimbal = photo.gimbal;
     sky.follow(view);
 

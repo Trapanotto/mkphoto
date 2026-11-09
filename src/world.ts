@@ -222,7 +222,7 @@ function bridgeDistance(x: number, z: number) {
 
 /** Landmarks in stone, and the arcades of Bern's old town. */
 function buildingStyle(id: Region['id']) {
-  return (x: number, z: number, type: string): BuildingStyle => {
+  return (x: number, z: number, type: string, crowd: number): BuildingStyle => {
     const d = Math.hypot(x, z);
     if (id === 'bern') {
       if (d < 50 && type.startsWith('Sakral')) return 1;
@@ -232,10 +232,14 @@ function buildingStyle(id: Region['id']) {
     if (id === 'chillon' && d < 75) return 2;
     if (id === 'lenzburg' && d < 70) return 2;
     if (type.startsWith('Sakral') && d < 400) return 1;
-    return 0;
+    if (id === 'zermatt' || id === 'landwasser') return 4;
+    // houses standing wall to wall: an old town with painted and half-timbered fronts
+    return crowd >= 14 ? 5 : 0;
   };
 }
 
+/** Direction to the sun (or moon), set by the time of day; the water glitters towards it. */
+export const sunDirection = new THREE.Vector3(0.5, 0.7, -0.45).normalize();
 /** 1 by day, 0 at night; set by the time of day. */
 export const daylightLevel = { value: 1 };
 const daylight = () => daylightLevel.value;
@@ -280,14 +284,22 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   // --- Buildings and landmarks -----------------------------------------------------
   // buildings from swissBUILDINGS3D; their roofs also drive collision
   const roofMap = new RoofMap(data.core.size / 2, data.core.center.x, data.core.center.z);
-  scene.add(buildings3dMesh(houses, roofMap, buildingStyle(region.id)));
+  scene.add(buildings3dMesh(houses, roofMap, buildingStyle(region.id), region.id === 'bern'));
   obstacles.roofs = roofMap;
   lc?.bakeDensity(roofMap);
   const windows = new THREE.MeshBasicMaterial({ color: '#3a2a22' });
-  const routes = createRoads(scene, data.roads, obstacles, windows, region.id === 'luzern', riverMask(data.rivers, lc));
+  const built: number[] = [LC.residential, LC.industrial, LC.campus, LC.parking, LC.sports, LC.park, LC.cemetery];
+  const routes = createRoads(scene, data.roads, obstacles, windows, {
+    lakeBridges: region.id === 'luzern',
+    wet: riverMask(data.rivers, lc),
+    structures: data.structures,
+    oldTown: (x, z) => !!lc && lc.densityAt(x, z) > 0.4,
+    urban: (x, z) => (lc ? built.includes(lc.classAt(x, z)) : region.style === 'city'),
+    gravelLanes: region.style === 'alpine',
+  });
   // railways (viaducts included), rivers and a train where the region has them
   const rail = createRails(scene, data.rails, obstacles);
-  const updateRivers = createRivers(scene, data.rivers, data.core, lc);
+  const updateRivers = createRivers(scene, data.rivers, data.core, lc, data.structures?.waterways ?? null);
   const updateTrain = region.ambient.train ? createTrain(scene, rail.tracks, region.ambient.train) : () => {};
 
   let landmarks: Landmark[];
@@ -304,7 +316,9 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   }
   // no trees in rivers or pools (bridge decks and boats look like trees in the surface model)
   const wet: number[] = [LC.river, LC.lake, LC.pool];
-  const trees = lc ? data.trees.filter(([x, z]) => !wet.includes(lc.classAt(x, z))) : data.trees;
+  // … and none growing through a roof or out of a road
+  const onRoad = (x: number, z: number) => routes.some((r) => r.kind === 'car' && Math.abs(r.pts[0].x - x) < 400 && r.pts.some((p) => Math.abs(p.x - x) < r.width / 2 && Math.abs(p.z - z) < r.width / 2));
+  const trees = data.trees.filter(([x, z]) => !(lc && wet.includes(lc.classAt(x, z))) && !(roofMap.top(x, z) > -1e9) && !onRoad(x, z));
   const ambient = createAmbient(scene, { trees }, routes, obstacles, density, region);
   let clock = 0;
 
@@ -416,7 +430,7 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
     update(dt, wind) {
       clock += dt;
       ambient.update(dt, clock);
-      updateRivers(clock);
+      updateRivers(clock, daylight());
       updateTrain(dt);
       water.update(clock, wind, daylight());
       // clouds stay bright by day and go dark at night

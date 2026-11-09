@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { windowNight } from './buildings';
-import { daylightLevel } from './world';
+import { daylightLevel, sunDirection } from './world';
 import { outlineColor } from './outline';
 import type { Sky } from './sky';
 
@@ -107,5 +107,6 @@ export class TimeOfDay {
     const el = day ? Math.max(0.08, elevation) : Math.max(0.35, -elevation);
     env.sky.sunDir.set(Math.cos(az) * Math.cos(el), Math.sin(el), -0.45).normalize();
     env.sun.position.copy(env.sky.sunDir).multiplyScalar(100);
+    sunDirection.copy(env.sky.sunDir);
   }
 }

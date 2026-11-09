@@ -83,9 +83,9 @@ export function wallMaterial() {
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec4 aWall;\nattribute float aSeed;\nattribute vec2 aStyle;\nvarying vec4 vWall;\nvarying float vSeed;\nvarying vec2 vStyle;',
+        '#include <common>\nattribute vec4 aWall;\nattribute float aSeed;\nattribute vec2 aStyle;\nattribute float aTotal;\nvarying float vTotal;\nvarying vec4 vWall;\nvarying float vSeed;\nvarying vec2 vStyle;',
       )
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvSeed = aSeed;\nvStyle = aStyle;');
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvSeed = aSeed;\nvStyle = aStyle;\nvTotal = aTotal;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -94,6 +94,7 @@ export function wallMaterial() {
         varying vec4 vWall;
         varying float vSeed;
         varying vec2 vStyle;
+        varying float vTotal;
         float hash3(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
         float box(vec2 p, vec2 a, vec2 b, vec2 aa) {
           vec2 s = smoothstep(a - aa, a + aa, p) * (1.0 - smoothstep(b - aa, b + aa, p));
@@ -145,52 +146,154 @@ export function wallMaterial() {
             lit = small * wall * uNight * step(0.75, k);
           }
         } else {
-        float modern = step(0.5, fract(abs(vSeed) * 7.0)) * step(24.0, h + roof);
-        float floorH = mix(3.1, 3.6, modern);
-        float colW = mix(2.7, 3.0, modern);
-        vec2 cell = vec2(u / colW, h / floorH);
+        float sd = abs(vSeed);
+        float r1 = hash3(vec3(sd, 3.0, 7.0)), r2 = hash3(vec3(sd, 5.0, 1.0)), r3 = hash3(vec3(sd, 9.0, 4.0));
+        float modern = style == 0 ? step(0.5, fract(sd * 7.0)) * step(24.0, h + roof) : 0.0;
+        // house type: 0 classic with shutters, 1 stone surrounds and balconies, 2 chalet, 3 modern flats,
+        // 4 half-timbered, 5 painted old-town front
+        int kind = 0;
+        if (style == 4) kind = r1 < 0.78 ? 2 : 0;
+        else if (style == 5) kind = r1 < 0.3 ? 0 : r1 < 0.55 ? 5 : r1 < 0.78 ? 4 : 1;
+        else if (style == 3) kind = r1 < 0.7 ? 1 : 5;
+        else kind = r1 < 0.38 ? 0 : r1 < 0.62 ? 1 : r1 < 0.92 ? 3 : 4;
+        if (modern > 0.5) kind = 6;
+        // floors and window columns are fitted to this wall: nothing is cut at a corner or under the eaves
+        float floorH = kind == 6 ? 3.6 : kind == 3 ? 2.9 : 2.9 + r3 * 0.5;
+        float colW = kind == 6 ? 3.0 : kind == 3 ? 3.4 : kind == 4 ? 2.3 + r2 * 0.4 : 2.5 + r2 * 0.9;
+        float wallLen = vWall.z;
+        // height of the whole wall face (the old footprint builder has none: use this triangle's)
+        float total = vTotal > 0.5 ? vTotal : h + roof;
+        float fh = total / max(1.0, floor(total / floorH + 0.2));
+        float cw = wallLen / max(1.0, floor(wallLen / colW));
+        vec2 cell = vec2(u / cw, h / fh);
         vec2 f = fract(cell);
         vec2 id = floor(cell);
-        vec2 aa = fwidth(cell) * 1.2;
+        // position inside the cell in metres: x from the middle, y from the floor
+        vec2 m = vec2((f.x - 0.5) * cw, f.y * fh);
+        vec2 aa = fwidth(vec2(u, h)) * 1.1;
         bool ground = id.y < 1.0;
-        // keep a margin to corners and to the roof
-        float inWall = step(0.0, vSeed) * step(0.9, rest) * step(0.6, h) * step(1.2, roof);
-        float arcade = step(2.5, vStyle.x);
+        float wk = hash3(vec3(id, sd));
+        float inWall = step(0.0, vSeed) * step(1.9, wallLen) * step(2.3, total);
+        float arcade = style == 3 ? 1.0 : 0.0;
         float near = 1.0 - far;
+        vec3 wallCol = diffuseColor.rgb;
+        vec3 trim = vec3(0.8, 0.77, 0.7);
+        float s = hash3(vec3(sd, 1.0, 2.0));
+        vec3 shutterCol = s < 0.3 ? vec3(0.07, 0.2, 0.1) : s < 0.55 ? vec3(0.32, 0.06, 0.05) : s < 0.75 ? vec3(0.2, 0.11, 0.06) : s < 0.9 ? vec3(0.08, 0.15, 0.26) : vec3(0.4, 0.4, 0.37);
+        vec3 wood = mix(vec3(0.24, 0.13, 0.07), vec3(0.34, 0.2, 0.1), r2);
+
+        // --- wall surface -------------------------------------------------------------------
+        if (kind == 2 && !ground) {
+          // chalet: sun-browned timber above a plastered ground floor
+          wallCol = wood * (0.9 + 0.18 * step(0.5, fract(h / 0.24)) * near);
+        } else if (kind == 4 && !ground) {
+          // half-timbered: posts, beams and braces on white infill
+          vec3 timber = r3 < 0.5 ? vec3(0.13, 0.07, 0.045) : vec3(0.27, 0.06, 0.05);
+          float post = 1.0 - smoothstep(0.0, aa.x, cw * 0.5 - abs(m.x) - 0.09);
+          float beam = 1.0 - smoothstep(0.0, aa.y, min(m.y, fh - m.y) - 0.1);
+          float d = abs((wk > 0.81 ? m.x / cw + 0.5 : 0.5 - m.x / cw) - m.y / fh) * min(cw, fh) * 0.7;
+          float brace = step(0.62, wk) * (1.0 - smoothstep(0.07, 0.07 + aa.x, d));
+          wallCol = mix(vec3(0.78, 0.74, 0.66), timber, max(max(post, beam), brace) * near * inWall);
+        } else if (kind == 3) {
+          // modern flats: light render with darker bands between the floors
+          wallCol = mix(wallCol, wallCol * 0.82, step(m.y, 0.35) * step(1.0, id.y) * step(0.0, vSeed));
+        }
         // a stone plinth, a cornice under the eaves and thin cornices between floors
-        float plinth = (1.0 - modern) * step(h, 0.75);
-        float cornice = (1.0 - modern) * (1.0 - smoothstep(0.25, 0.32, roof)) * step(0.0, vSeed);
-        float course = (1.0 - modern) * step(1.0, id.y) * (1.0 - smoothstep(0.0, aa.y * 1.5 + 0.015, min(f.y, 1.0 - f.y))) * near * step(0.0, vSeed);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, plinth);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.8, cornice);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.08 + 0.03, course * 0.8);
-        float door = ground ? box(f, vec2(0.3, 0.0), vec2(0.7, 0.72), aa) * step(hash3(vec3(id, vSeed + 4.0)), 0.18) : 0.0;
-        float win = ground
-          ? box(f, vec2(0.1, 0.08), vec2(0.9, 0.7), aa) * (1.0 - step(hash3(vec3(id, vSeed + 4.0)), 0.18))
-          : modern > 0.5 ? box(f, vec2(0.08, 0.22), vec2(0.92, 0.86), aa) : box(f, vec2(0.3, 0.26), vec2(0.7, 0.8), aa);
-        float frame = ground ? 0.0 : box(f, vec2(0.26, 0.22), vec2(0.74, 0.84), aa) - win;
-        float sill = (ground || modern > 0.5) ? 0.0 : box(f, vec2(0.24, 0.17), vec2(0.76, 0.22), aa);
-        float shutter = (ground || modern > 0.5) ? 0.0 : box(f, vec2(0.14, 0.26), vec2(0.28, 0.8), aa) + box(f, vec2(0.72, 0.26), vec2(0.86, 0.8), aa);
+        float old = (kind == 6 || kind == 3) ? 0.0 : 1.0;
+        float plinth = old * step(h, 0.7);
+        float cornice = old * (1.0 - smoothstep(0.25, 0.32, roof)) * step(0.0, vSeed);
+        float course = old * (kind == 4 || kind == 2 ? 0.0 : 1.0) * step(1.0, id.y) * (1.0 - smoothstep(0.03, 0.03 + aa.y, m.y)) * near * step(0.0, vSeed);
+        wallCol = mix(wallCol, wallCol * 0.62, plinth);
+        wallCol = mix(wallCol, wallCol * 0.8, cornice);
+        wallCol = mix(wallCol, wallCol * 1.07 + 0.02, course * 0.8);
+
+        // --- openings, all in metres ---------------------------------------------------------
+        // window: width, height and sill height by house type
+        vec3 ws = kind == 1 ? vec3(1.05, 1.65, 0.8) : kind == 2 ? vec3(0.95, 1.15, 1.0) : kind == 3 ? vec3(cw - 0.7, 1.45, 0.85)
+          : kind == 4 ? vec3(0.9, 1.2, 0.95) : kind == 5 ? vec3(0.95, 1.6, 0.85) : kind == 6 ? vec3(cw - 0.3, fh - 0.9, 0.55) : vec3(1.0, 1.45, 0.9);
+        bool shop = ground && (style == 5 || style == 3 || kind == 6);
+        if (shop) ws = vec3(cw - 0.6, min(2.1, fh - 1.0), 0.45);
+        ws.y = min(ws.y, fh - ws.z - 0.5);
+        vec2 wc = vec2(0.0, ws.z + ws.y * 0.5);
+        vec2 wh = ws.xy * 0.5;
+        #define RECT(c, hs) (smoothstep(-aa.x, aa.x, (hs).x - abs(m.x - (c).x)) * smoothstep(-aa.y, aa.y, (hs).y - abs(m.y - (c).y)))
+        float doorHere = ground ? step(wk, 0.16) : 0.0;
+        float open = (kind == 4 && !ground) ? step(wk, 0.62) : 1.0;
+        float win = RECT(wc, wh) * open * (1.0 - doorHere);
+        // arched heads on painted fronts
+        if (kind == 5 && !ground) win *= step(length(vec2(m.x, max(0.0, m.y - (wc.y + wh.y - wh.x)))), wh.x);
+        float door = RECT(vec2(0.0, 1.05), vec2(0.5, 1.05)) * doorHere;
+        float fancy = (kind == 3 || kind == 6 || shop) ? 0.0 : 1.0;
+        float frame = RECT(wc, wh + 0.07) * open * (1.0 - doorHere) * fancy;
+        float sill = RECT(vec2(0.0, ws.z - 0.1), vec2(wh.x + 0.16, 0.045)) * open * (1.0 - doorHere) * fancy;
+        float shutter = 0.0, balcony = 0.0, awning = 0.0, flowers = 0.0, bars = 0.0;
+        if (!ground) {
+          if (kind == 0 || kind == 2) shutter = (RECT(vec2(-wh.x - 0.3, wc.y), vec2(0.21, wh.y)) + RECT(vec2(wh.x + 0.3, wc.y), vec2(0.21, wh.y))) * open;
+          // flower boxes on some sills
+          flowers = RECT(vec2(0.0, ws.z + 0.03), vec2(wh.x, 0.1)) * open * fancy * step(0.72, hash3(vec3(id, sd + 2.0)));
+          // balconies: on some window columns, or right across a chalet or a block of flats
+          float colK = hash3(vec3(id.x, sd, 8.0));
+          bool across = (kind == 2 && mod(id.y, 2.0) < 1.0) || (kind == 3 && colK < 0.45);
+          if (across || (kind == 1 && colK < 0.3)) {
+            float bw = across ? cw : wh.x + 0.45;
+            balcony = RECT(vec2(0.0, 0.5), vec2(bw, 0.5));
+            bars = step(0.5, fract(u / 0.14)) * step(0.12, m.y) * step(m.y, 0.92);
+            if (kind == 2) flowers = max(flowers, RECT(vec2(0.0, 1.05), vec2(cw, 0.09)) * step(0.3, hash3(vec3(id.y, sd, 6.0))));
+          }
+        } else if (shop && kind != 6) {
+          // striped awnings over some shop windows
+          awning = RECT(vec2(0.0, ws.z + ws.y + 0.2), vec2(wh.x + 0.15, 0.22)) * step(0.55, wk);
+        }
         // Bern's Lauben: round arches over a shaded walkway on the ground floor
         float arch = 0.0;
         float hg = vStyle.y;
         if (arcade > 0.5 && hg < 3.6 && hg > -0.5) {
           float ax = fract(u / 4.0) - 0.5;
           arch = step(abs(ax), 0.38) * step(hg, 2.3 + sqrt(max(0.0, 0.1444 - ax * ax)) * 2.6);
-          win = 0.0; door = 0.0; plinth = 0.0;
+          win = 0.0; door = 0.0; frame = 0.0; awning = 0.0; sill = 0.0;
         }
-        win *= inWall; frame *= inWall; shutter *= inWall; door *= inWall; sill *= inWall;
-        // fade the pattern out far away, where it would only flicker
-        win *= near; frame *= near; shutter *= near; door *= near; sill *= near;
-        float s = hash3(vec3(vSeed, 1.0, 2.0));
-        vec3 shutterCol = s < 0.33 ? vec3(0.16, 0.36, 0.2) : s < 0.66 ? vec3(0.45, 0.14, 0.1) : vec3(0.35, 0.24, 0.14);
-        vec3 glass = mix(vec3(0.12, 0.16, 0.22), vec3(0.32, 0.42, 0.52), smoothstep(0.0, 1.0, f.y));
-        diffuseColor.rgb = mix(diffuseColor.rgb, shutterCol, shutter);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.93, 0.88), max(frame, sill));
-        diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
-        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.3, 0.2, 0.13), shutterCol, 0.4), door);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.17, 0.15), arch * near);
-        lit = step(hash3(vec3(id, vSeed)), ground ? 0.55 : 0.38) * win * uNight + arch * uNight * 0.5;
+        // nothing that would poke above this piece of wall (gable tips)
+        // only whole windows: the roof line (sloping under a gable) must clear both corners of the opening
+        float lineH = h + roof;
+        vec2 du = vec2(dFdx(u), dFdy(u));
+        float slope = dot(vec2(dFdx(lineH), dFdy(lineH)), du) / max(dot(du, du), 1e-9);
+        float reach = wh.x + 0.35;
+        float lowest = lineH + min(slope * (-reach - m.x), slope * (reach - m.x));
+        float show = inWall * near * step(id.y * fh + wc.y + wh.y + 0.3, lowest);
+        win *= show; frame *= show; shutter *= show; door *= show; sill *= show; balcony *= show; awning *= show; flowers *= show;
+
+        // --- colours ------------------------------------------------------------------------
+        // glass: dark, with one lighter band of sky across the top
+        vec2 g = (m - (wc - wh)) / (2.0 * wh);
+        vec3 glass = mix(vec3(0.045, 0.07, 0.11), vec3(0.16, 0.25, 0.36), step(0.7, g.y));
+        // curtains at the sides of some windows, thin glazing bars
+        float curtain = fancy * step(0.5, hash3(vec3(id, sd + 5.0))) * (step(g.x, 0.17) + step(0.83, g.x));
+        glass = mix(glass, vec3(0.62, 0.59, 0.52), curtain);
+        float barV = 1.0 - smoothstep(0.02, 0.02 + aa.x, abs(m.x));
+        float barH = 1.0 - smoothstep(0.02, 0.02 + aa.y, abs(m.y - (wc.y + wh.y * 0.4)));
+        glass = mix(glass, trim, fancy * max(barV, kind == 5 ? 0.0 : barH));
+        if (kind == 3 || kind == 6 || shop) glass = mix(glass, vec3(0.3, 0.32, 0.34), 1.0 - smoothstep(0.03, 0.03 + aa.x, abs(fract(m.x / 1.3 + 0.5) - 0.5) * 1.3));
+        // closed shutters on a few windows
+        float shut = (kind == 0 || kind == 2) && !ground ? step(0.9, hash3(vec3(id, sd + 7.0))) : 0.0;
+        vec3 slats = shutterCol * (0.85 + 0.25 * step(0.5, fract(m.y / 0.11)));
+        glass = mix(glass, slats, shut);
+        vec3 c = wallCol;
+        c = mix(c, kind == 2 ? wood * 0.75 : slats, shutter);
+        vec3 frameCol = kind == 4 ? vec3(0.13, 0.08, 0.05) : kind == 1 || kind == 5 ? mix(wallCol, trim, 0.6) * 1.05 : trim;
+        c = mix(c, frameCol, max(frame, sill));
+        c = mix(c, glass, win);
+        c = mix(c, mix(vec3(0.2, 0.12, 0.07), shutterCol, 0.4) * (0.85 + 0.3 * step(abs(m.x), 0.42) * step(0.25, m.y) * step(m.y, 1.9)), door);
+        // balcony: railing bars in front of whatever is behind, a slab below
+        vec3 rail = kind == 2 ? wood * 0.7 : kind == 3 ? vec3(0.5, 0.56, 0.62) : vec3(0.07, 0.075, 0.085);
+        c = mix(c, mix(c * 0.85, rail, kind == 3 ? 0.7 : max(bars, step(0.92, m.y))), balcony);
+        c = mix(c, rail * 0.8, balcony * step(m.y, 0.12));
+        vec3 petal = hash3(vec3(floor(u / 0.18), id.y, sd)) < 0.5 ? vec3(0.7, 0.05, 0.08) : vec3(0.85, 0.3, 0.45);
+        c = mix(c, mix(vec3(0.1, 0.27, 0.09), petal, step(0.45, hash3(vec3(floor(u / 0.09), id.y, 2.0)))), flowers);
+        vec3 awn = wk < 0.7 ? vec3(0.55, 0.08, 0.07) : wk < 0.85 ? vec3(0.07, 0.22, 0.12) : vec3(0.7, 0.45, 0.1);
+        c = mix(c, mix(awn, trim, step(0.5, fract(u / 0.5))), awning);
+        c = mix(c, vec3(0.05, 0.04, 0.035), arch * near);
+        diffuseColor.rgb = c;
+        lit = step(hash3(vec3(id, vSeed)), ground ? 0.55 : 0.38) * win * (1.0 - shut) * uNight + arch * uNight * 0.5;
         }`,
       )
       .replace(
@@ -251,7 +354,7 @@ export function buildingsMesh(data: BuildingData[], obstacles: ObstacleIndex) {
         walls.pos.push(x, y, z);
         walls.col.push(wallCol.r, wallCol.g, wallCol.b);
         // u along the wall, height above street, metres to the wall's end, metres to the roof
-        walls.wall.push(u, y - b.base, len - u, top - y);
+        walls.wall.push(u, y - b.base, len, top - y);
         walls.seed.push(seed);
       }
     }

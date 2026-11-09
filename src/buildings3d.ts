@@ -100,8 +100,14 @@ function random(seed: number) {
   };
 }
 
-const HOUSE_WALLS = ['#f2e6d0', '#e8d2b0', '#fbf6ee', '#f0d9c4', '#e6c9a8', '#d9d2c4', '#f3dcc2', '#e9e1cf', '#dcc7a5', '#efe3c8'];
-const TILE_ROOFS = ['#9a4a32', '#8a3a2a', '#a65a3a', '#7a4030', '#8f4b34', '#6e3a2c'];
+const HOUSE_WALLS = ['#f2e6d0', '#e8d2b0', '#fbf6ee', '#f0d9c4', '#e6c9a8', '#d9d2c4', '#f3dcc2', '#e9e1cf', '#dcc7a5', '#efe3c8', '#f4f1ea', '#e3e6e2', '#f1e3b6', '#eccfc0', '#d7dfcf', '#e8e8e8'];
+/** Painted fronts of an old town, the sandstone of Bern, white plaster under chalet timber. */
+const OLD_TOWN_WALLS = ['#e6c47c', '#e3a999', '#b9cbd6', '#bccaa6', '#f3ead6', '#fbf7ef', '#dc9d70', '#cdbfd2', '#efd9a0', '#d98f7c', '#a9c4c0', '#f0e2c6'];
+const BERN_WALLS = ['#c9c3a4', '#bfb99c', '#d2ccb0', '#c4c7ad', '#cfc6a2', '#b9b497'];
+const CHALET_WALLS = ['#f4efe4', '#ece5d6', '#f7f3ea'];
+const PALETTES: Record<number, string[]> = { 3: BERN_WALLS, 4: CHALET_WALLS, 5: OLD_TOWN_WALLS };
+const TILE_ROOFS = ['#9a4a32', '#8a3a2a', '#a65a3a', '#7a4030', '#8f4b34', '#6e3a2c', '#a35238', '#84402e', '#5f5d60', '#6c5a50'];
+const ALPINE_ROOFS = ['#6b6660', '#59565a', '#74685c', '#4f4a48'];
 const FLAT_ROOFS = ['#9a968c', '#8c8a84', '#a3a097', '#7f8f6a'];
 
 /** Wall colour and whether the walls get windows, by swisstopo object type. */
@@ -127,8 +133,8 @@ function styleFor(type: string, rand: () => number): { wall: string; windows: bo
   }
 }
 
-/** 0 house, 1 Gothic stone church, 2 castle stone, 3 house with arcades on the ground floor. */
-export type BuildingStyle = 0 | 1 | 2 | 3;
+/** 0 house, 1 Gothic stone church, 2 castle stone, 3 house with arcades on the ground floor, 4 alpine house, 5 old-town house. */
+export type BuildingStyle = 0 | 1 | 2 | 3 | 4 | 5;
 const STONE: Record<number, string> = { 1: '#c4b98f', 2: '#c3b9a6' };
 
 /** Roof tiles in rows, a glazed pattern on church roofs, gravel and solar panels on flat roofs. */
@@ -200,7 +206,7 @@ function roofMaterial() {
  * Builds wall and roof meshes from the triangle list and fills the roof map.
  * styleAt picks a building's look from its centre and swisstopo type (landmarks in stone, arcades).
  */
-export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: number, z: number, type: string) => BuildingStyle = () => 0) {
+export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: number, z: number, type: string, crowd: number) => BuildingStyle = () => 0, glazedRoofs = false) {
   const rand = random(3);
   const q = data.unit;
   const n = data.triangles;
@@ -227,14 +233,27 @@ export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: 
       if (P[o + 1] * q > top[b * 3 + 1]) top.set([P[o] * q, P[o + 1] * q, P[o + 2] * q], b * 3);
     }
   }
-  const look = data.buildings.map((type, b) => styleAt(sum[b * 3] / (sum[b * 3 + 1] || 1), sum[b * 3 + 2] / (sum[b * 3 + 1] || 1), data.types[type]));
+  // how many buildings stand close by: tight rows mean an old town
+  const cx = (b: number) => sum[b * 3] / (sum[b * 3 + 1] || 1);
+  const cz = (b: number) => sum[b * 3 + 2] / (sum[b * 3 + 1] || 1);
+  const blocks = new Map<string, number>();
+  for (let b = 0; b < count; b++) {
+    const k = `${Math.floor(cx(b) / 30)},${Math.floor(cz(b) / 30)}`;
+    blocks.set(k, (blocks.get(k) ?? 0) + 1);
+  }
+  const crowd = (b: number) => {
+    let c = 0;
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) c += blocks.get(`${Math.floor(cx(b) / 30) + dx},${Math.floor(cz(b) / 30) + dz}`) ?? 0;
+    return c;
+  };
+  const look = data.buildings.map((type, b) => styleAt(cx(b), cz(b), data.types[type], crowd(b)));
   const styles = data.buildings.map((type, b) => {
     const st = styleFor(data.types[type], rand);
     const stone = STONE[look[b]];
     return {
       look: look[b],
-      wall: new THREE.Color(stone ?? st.wall),
-      tile: new THREE.Color(TILE_ROOFS[Math.floor(rand() * TILE_ROOFS.length)]),
+      wall: new THREE.Color(stone ?? (st.windows && !st.modern && PALETTES[look[b]] ? PALETTES[look[b]][Math.floor(rand() * PALETTES[look[b]].length)] : st.wall)),
+      tile: new THREE.Color(look[b] === 4 ? ALPINE_ROOFS[Math.floor(rand() * ALPINE_ROOFS.length)] : TILE_ROOFS[Math.floor(rand() * TILE_ROOFS.length)]),
       flat: new THREE.Color(st.modern ? '#7c8288' : FLAT_ROOFS[Math.floor(rand() * FLAT_ROOFS.length)]),
       // negative seed: no windows (churches, walls, towers, canopies)
       seed: (st.windows ? 1 : -1) * (rand() * 100 + 1) + (st.modern ? 0.07 : 0),
@@ -247,6 +266,7 @@ export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: 
   const wallAttr: number[] = [];
   const wallSeed: number[] = [];
   const wallStyle: number[] = [];
+  const wallTotal: number[] = [];
   const roofPos: number[] = [];
   const roofCol: number[] = [];
   const roofAttr: number[] = [];
@@ -255,12 +275,52 @@ export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: 
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const u = new THREE.Vector3(), v = new THREE.Vector3(), nrm = new THREE.Vector3();
 
-  for (let t = 0; t < n; t++) {
+  // every wall face (all triangles of a building in one vertical plane): where it starts, its length and top
+  interface Face { nx: number; nz: number; d: number; u0: number; u1: number; top: number; tris: number[] }
+  const faces = new Map<number, Face[]>();
+  /** The wall face a triangle belongs to (same building, same plane within a tolerance); null for roofs. */
+  const faceOf = (t: number): Face | null => {
     const o = t * 9;
     a.set(P[o] * q, P[o + 1] * q, P[o + 2] * q);
     b.set(P[o + 3] * q, P[o + 4] * q, P[o + 5] * q);
     c.set(P[o + 6] * q, P[o + 7] * q, P[o + 8] * q);
     nrm.crossVectors(u.subVectors(b, a), v.subVectors(c, a)).normalize();
+    if (nrm.y > 0.25) return null;
+    const len = Math.hypot(nrm.x, nrm.z) || 1;
+    const nx = nrm.x / len, nz = nrm.z / len;
+    const list = faces.get(data.owners[t]) ?? faces.set(data.owners[t], []).get(data.owners[t])!;
+    for (const f of list) if (f.nx * nx + f.nz * nz > 0.99 && Math.abs(a.x * f.nx + a.z * f.nz - f.d) < 0.35) return f;
+    const f: Face = { nx, nz, d: a.x * nx + a.z * nz, u0: Infinity, u1: -Infinity, top: -Infinity, tris: [] };
+    list.push(f);
+    return f;
+  };
+  for (let t = 0; t < n; t++) {
+    const face = faceOf(t);
+    if (!face) continue;
+    for (const p of [a, b, c]) {
+      const pu = p.x * -face.nz + p.z * face.nx;
+      face.u0 = Math.min(face.u0, pu);
+      face.u1 = Math.max(face.u1, pu);
+      face.top = Math.max(face.top, p.y);
+      face.tris.push(pu, p.y);
+    }
+  }
+  /** Height of a wall face's upper edge at a position along it (the roof line, sloping under a gable). */
+  const roofLine = (tris: number[], pu: number) => {
+    let best = -Infinity;
+    for (let k = 0; k < tris.length; k += 6)
+      for (let e = 0; e < 3; e++) {
+        const u1 = tris[k + e * 2], y1 = tris[k + e * 2 + 1];
+        const u2 = tris[k + ((e + 1) % 3) * 2], y2 = tris[k + ((e + 1) % 3) * 2 + 1];
+        if (pu < Math.min(u1, u2) - 0.02 || pu > Math.max(u1, u2) + 0.02) continue;
+        const f = Math.abs(u2 - u1) < 1e-4 ? (y2 > y1 ? 1 : 0) : Math.min(1, Math.max(0, (pu - u1) / (u2 - u1)));
+        best = Math.max(best, y1 + (y2 - y1) * f);
+      }
+    return best;
+  };
+
+  for (let t = 0; t < n; t++) {
+    const face = faceOf(t);
     const owner = data.owners[t];
     const st = styles[owner];
 
@@ -271,18 +331,21 @@ export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: 
       for (const p of [a, b, c]) {
         roofPos.push(p.x, p.y, p.z);
         roofCol.push(col.r, col.g, col.b);
-        roofAttr.push(Math.abs(st.seed) / 101, st.look);
+        roofAttr.push(Math.abs(st.seed) / 101, st.look === 1 && !glazedRoofs ? 0 : st.look);
       }
       roofs.addTriangle(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
     } else {
       // wall: window grid runs along the wall's horizontal direction
-      const len = Math.hypot(nrm.x, nrm.z) || 1;
-      const tx = -nrm.z / len, tz = nrm.x / len;
+      // the face's own direction, so every triangle of the wall measures along the same line
+      const whole = face!;
+      const tx = -whole.nz, tz = whole.nx;
       const top = Math.max(a.y, b.y, c.y);
+      // where the wall starts and how long it is: windows are spread evenly over it, never cut at a corner
       for (const p of [a, b, c]) {
         wallPos.push(p.x, p.y, p.z);
         wallCol.push(st.wall.r, st.wall.g, st.wall.b);
-        wallAttr.push(p.x * tx + p.z * tz + 4000, p.y - base[owner], 99, top - p.y);
+        wallAttr.push(p.x * tx + p.z * tz - whole.u0, p.y - base[owner], whole.u1 - whole.u0, Math.max(top, roofLine(whole.tris, p.x * tx + p.z * tz)) - p.y);
+        wallTotal.push(whole.top - base[owner]);
         wallSeed.push(st.seed);
         // style and height above the ground right there (arcades follow the street, not the back slope)
         wallStyle.push(st.look, p.y - terrainAt(p.x, p.z));
@@ -314,6 +377,7 @@ export function buildings3dMesh(data: Buildings3d, roofs: RoofMap, styleAt: (x: 
   wallGeo.setAttribute('color', new THREE.Float32BufferAttribute(wallCol, 3));
   wallGeo.setAttribute('aWall', new THREE.Float32BufferAttribute(wallAttr, 4));
   wallGeo.setAttribute('aSeed', new THREE.Float32BufferAttribute(wallSeed, 1));
+  wallGeo.setAttribute('aTotal', new THREE.Float32BufferAttribute(wallTotal, 1));
   wallGeo.setAttribute('aStyle', new THREE.Float32BufferAttribute(wallStyle, 2));
   wallGeo.computeVertexNormals();
   const walls = new THREE.Mesh(wallGeo, wallMaterial());

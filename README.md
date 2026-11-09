@@ -8,6 +8,7 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 
 - **M0 Grundgerüst:** Vite + TypeScript + three.js, automatisches Deployment auf GitHub Pages
 - **M1 Fliegen:** Flugmodell mit Assist- und Pro-Modus, Follow-Kamera, Akku (12 min, Laden auf dem Startplatz), Wind mit Böen, Flugverbot über 120 m und ausserhalb des Gebiets
+- **Detail-Durchgang 3:** Strassen als durchgehende Bänder mit sauberen Kurven und Kreuzungen, Zebrastreifen, Strassenlampen, Gehwege nur im Siedlungsgebiet; Brücken, Tunnel, Treppen und offene Bäche aus der swisstopo-Basiskarte (`structures.json`); Haustypen (Fensterläden, Fachwerk, bemalte Altstadtfronten, Chalets, moderne Wohnhäuser) mit Balkonen, Markisen und Blumenkästen, Fenster pro Wandfläche eingeteilt; Wasser mit Strömungsbändern, Himmelsglanz und Sonnenglitzern
 - **Detail-Durchgang 2:** Bodenbedeckung aus der swisstopo-Basiskarte (Wald, Felder, Gärten, Reben, Obstgärten, Friedhöfe, Sportplätze, Parkplätze, Fels, Gletscher), Flüsse als echte Wasserflächen mit Uferschaum, Seeufer nach Bodenbedeckung; Häuser mit Sockel, Gesimsen, Türen, Fensterbänken, Ziegelreihen, Kaminen und Solaranlagen; Wahrzeichen aus Sandstein mit Lanzettfenstern, Fialen und glasiertem Rautendach (Berner Münster) bzw. Burgmauerwerk (Chillon, Lenzburg); Lauben in der Berner Altstadt; Strassen mit Markierungen, Pflaster, Platten und Kies
 - **Regionen Château de Chillon, Landwasserviadukt, Berner Münster, Aarau Kettenbrücke, Schloss Lenzburg:** generischer Import (`tools/regions/<id>.json`) mit Gelände, Strassen, Bahnlinien (Viadukte, Züge), Flüssen (Aare, Landwasser) und Bäumen aus swisstopo, Strassenbrücken über Täler und Flüsse, je drei Aufträge; Wechsel im Menü unter „Region wechseln“ oder mit `?region=<id>`
 - **Region Matterhorn:** Riffelsee, Gornergrat und Matterhorn aus swisstopo-Höhendaten (vier Raster von 10 m bis 250 m), Gebäude aus swissBUILDINGS3D, Wanderwege aus swissTLM3D, alpine Farben, Alpendohlen, fünf eigene Aufträge; Region wechseln im Menü oder mit `?region=zermatt`
@@ -67,6 +68,7 @@ Weitere Regionen (chillon, landwasser, bern, aarau, lenzburg) laufen über den g
 node tools/import-region.mjs bern
 node tools/import-buildings3d.mjs bern
 node tools/import-landcover.mjs bern
+node tools/import-structures.mjs bern
 ```
 
 `import-landcover.mjs` liest die Vektorkacheln der swisstopo-Basiskarte (Bodenbedeckung, Landnutzung, Gewässerflächen) und schreibt pro Region ein Klassenraster (`landcover-*.bin.gz`).

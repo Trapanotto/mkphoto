@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { isWater, type Grid } from './terrain';
+import { sunDirection } from './world';
 
 /**
  * Cel-shaded water: saturated blue that turns turquoise near the shore, hard white foam
@@ -82,6 +83,7 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
       uHalf: { value: coreHalf },
       uCenter: { value: new THREE.Vector2(core.center.x, core.center.z) },
       uLakeOnly: { value: lakeOnly ? 1 : 0 },
+      uDay: { value: 1 },
       uDeep: { value: deep },
       uShallow: { value: shallow },
       uFoam: { value: foam },
@@ -92,6 +94,7 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
   uniforms.uDeep.value = deep;
   uniforms.uShallow.value = shallow;
   uniforms.uFoam.value = foam;
+  uniforms.uSun = { value: sunDirection };
 
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -117,6 +120,8 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
       uniform float uHalf;
       uniform vec2 uCenter;
       uniform float uLakeOnly;
+      uniform float uDay;
+      uniform vec3 uSun;
       uniform vec3 uDeep;
       uniform vec3 uShallow;
       uniform vec3 uFoam;
@@ -201,6 +206,19 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
         float tw = step(0.993, hash(sp)) * step(0.85, sin(uTime * 3.0 + hash(sp + 1.7) * 30.0));
         col = mix(col, vec3(1.0), tw * fade);
 
+        // sky sheen towards the horizon, in two steps with a wandering edge
+        vec3 V = normalize(cameraPosition - vec3(vWorld.x, 0.0, vWorld.y));
+        float graze = 1.0 - V.y;
+        float sheenWob = (noise(vWorld * 0.02 + drift * 0.02) - 0.5) * 0.06;
+        col = mix(col, mix(uShallow, vec3(1.0), 0.35), step(0.9, graze + sheenWob) * 0.25 + step(0.965, graze + sheenWob) * 0.22);
+        // the sun's path: flickering glitter where it mirrors on the water
+        float spec = max(dot(reflect(-V, vec3(0.0, 1.0, 0.0)), uSun), 0.0);
+        float glit = smoothstep(0.88, 0.99, spec) * step(0.7, noise(vWorld * 1.5 + vec2(uTime * 1.3, -uTime * 0.9)));
+        col = mix(col, vec3(1.0), glit * 0.9 * uDay);
+        // the shore mirrored as a darker band just off the bank
+        float mirror = smoothstep(2.5, 5.0, dist) * (1.0 - smoothstep(9.0, 16.0, dist));
+        col = mix(col, uDeep * 0.75, mirror * step(0.5, noise(vec2(vWorld.x * 0.3 + uTime * 0.2, vWorld.y * 0.08))) * 0.3 * step(dist, 59.0));
+
         // shore foam: a wobbly solid rim, and a broken second line rolling out and fading
         float rimW = 1.4 + 0.6 * sin(uTime * 1.3 + vWorld.x * 0.05 + vWorld.y * 0.04) + (noise(vWorld * 0.3) - 0.5) * 1.2;
         float rim = 1.0 - step(rimW, dist);
@@ -226,6 +244,7 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
     color: deep,
     update(time, wind, daylight) {
       uniforms.uTime.value = time;
+      uniforms.uDay.value = daylight;
       const w = Math.hypot(wind.x, wind.z) || 1;
       (uniforms.uWind.value as THREE.Vector2).set(wind.x / w, wind.z / w);
       shallow.copy(deep).lerp(turquoise, 0.35 + 0.2 * daylight);

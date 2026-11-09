@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { isWater, terrainAt, type Grid } from './terrain';
+import { isWater, terrainAt, type Grid, type Structures } from './terrain';
 import { LC, type Landcover } from './landcover';
+import { sunDirection } from './world';
 
 export interface RiverData {
   name: string | null;
@@ -107,6 +108,8 @@ const VERTEX = /* glsl */ `
 const FRAGMENT = (area: boolean) => /* glsl */ `
   #include <fog_pars_fragment>
   uniform float uTime;
+  uniform float uDay;
+  uniform vec3 uSun;
   uniform sampler2D uLc;
   uniform vec4 uBox;
   varying vec2 vUv;
@@ -138,33 +141,53 @@ const FRAGMENT = (area: boolean) => /* glsl */ `
       near += (1.0 - river(jp + vec2(cos(a), sin(a)) * 5.5)) * 0.5;
     }
     bank = clamp(near / 6.0, 0.0, 1.0);
-    lanePos = vUv.y / 6.0 + vnoise(vW.xz * 0.02) * 1.5;`
+    lanePos = vUv.y / 5.0 + vnoise(vW.xz * 0.02) * 1.8;`
         : `bank = smoothstep(0.45, 1.0, abs(vUv.y));
     lanePos = (vUv.y + 1.0) * 1.5;`
     }
-    vec3 col = mix(deep, shallow, smoothstep(0.1, 0.7, bank));
-    // white streaks in lanes, drifting downstream
+    // colour in steps: light over the shallows at the bank, deep blue in the channel
+    float wob = (vnoise(vW.xz * 0.12) - 0.5) * 0.2;
+    vec3 col = mix(deep, shallow, step(0.18, bank + wob) * 0.45 + step(0.42, bank + wob) * 0.55);
+    // long bands sliding downstream: darker runs and lighter slicks
+    float band = vnoise(vec2(vUv.x * 0.035 - uTime * 0.22, lanePos * 0.9));
+    col = mix(col, deep * 0.82, step(0.62, band) * 0.5 * (1.0 - bank));
+    col = mix(col, shallow, step(band, 0.3) * 0.28);
+    // the trees and banks mirrored darkly along the shore
+    float mirror = smoothstep(0.12, 0.3, bank) * (1.0 - smoothstep(0.3, 0.55, bank));
+    col = mix(col, vec3(0.08, 0.3, 0.3), mirror * step(0.45, vnoise(vec2(vUv.x * 0.25, vUv.y * 0.6 + uTime * 0.3))) * 0.45);
+    // flow lines: thin tapering streaks in wandering lanes
     float lane = floor(lanePos);
-    float u = vUv.x * 0.12 - uTime * 0.5 + hash(vec2(lane, 1.0)) * 10.0;
-    float len = 0.6 + 0.3 * hash(vec2(lane, floor(u) + 3.0));
-    float dash = step(len, fract(u)) * step(0.6, hash(vec2(lane, floor(u))));
-    float laneMid = 1.0 - smoothstep(0.05, 0.1, abs(fract(lanePos) - 0.5));
+    float u = vUv.x * 0.07 - uTime * 0.32 + hash(vec2(lane, 1.0)) * 10.0;
+    float fu = fract(u);
+    float len = 0.35 + 0.4 * hash(vec2(lane, floor(u) + 3.0));
+    float taper = smoothstep(0.0, 0.25, fu / len) * (1.0 - smoothstep(0.6, 1.0, fu / len));
+    float streak = step(fu, len) * step(0.5, hash(vec2(lane, floor(u)))) * taper;
+    float laneMid = 1.0 - smoothstep(0.0, 0.07 * taper + 0.01, abs(fract(lanePos) - 0.5));
     float fade = 1.0 - smoothstep(250.0, 600.0, length(vW - cameraPosition));
-    col = mix(col, vec3(1.0), dash * laneMid * 0.85 * fade);
-    // ripples: soft darker swirls
-    col *= 0.94 + 0.06 * vnoise(vec2(vUv.x * 0.08 - uTime * 0.5, vUv.y * 0.3));
-    // foamy banks with a broken edge
-    float foam = smoothstep(0.55, 0.8, bank + (vnoise(vW.xz * 0.7 + vec2(uTime * 0.6, 0.0)) - 0.5) * 0.3);
+    col = mix(col, vec3(1.0), streak * laneMid * 0.8 * fade);
+    // sky sheen towards the horizon and glitter towards the sun
+    vec3 V = normalize(cameraPosition - vW);
+    float graze = 1.0 - V.y;
+    col = mix(col, vec3(0.72, 0.87, 0.96), step(0.9, graze + wob * 0.3) * 0.22 + step(0.97, graze) * 0.2);
+    float spec = max(dot(reflect(-V, vec3(0.0, 1.0, 0.0)), uSun), 0.0);
+    float glitter = smoothstep(0.9, 0.99, spec) * step(0.72, vnoise(vW.xz * 1.6 + vec2(uTime * 1.4, -uTime)));
+    col = mix(col, vec3(1.0), glitter * 0.9);
+    // foamy banks with a broken, breathing edge
+    float foam = smoothstep(0.55, 0.8, bank + (vnoise(vW.xz * 0.7 + vec2(uTime * 0.6, 0.0)) - 0.5) * 0.3 + 0.05 * sin(uTime * 1.4 + vUv.x * 0.2));
     col = mix(col, vec3(1.0), foam * 0.9);
+    // dusk and night
+    col *= mix(vec3(0.16, 0.2, 0.36), vec3(1.0), uDay);
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
 `;
 
-function riverMaterial(area: boolean, time: { value: number }, lc: Landcover | null) {
+function riverMaterial(area: boolean, time: { value: number }, day: { value: number }, lc: Landcover | null) {
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
   uniforms.uTime = time;
+  uniforms.uDay = day;
+  uniforms.uSun = { value: sunDirection };
   const g = lc?.grids[0];
   uniforms.uLc = { value: g?.texture ?? null };
   uniforms.uBox = { value: g ? new THREE.Vector4(g.x0, g.z0, g.count * g.res, g.res) : new THREE.Vector4() };
@@ -236,13 +259,18 @@ function riverAreas(core: Grid, lc: Landcover, flow: (x: number, z: number) => [
  * Rivers and streams from the swissTLM3D water network: in the detailed area the rivers are
  * real water areas from the land cover; streams and the rivers further out are ribbons on the terrain.
  */
-export function createRivers(scene: THREE.Scene, rivers: RiverData[], core: Grid, lc: Landcover | null) {
+export function createRivers(scene: THREE.Scene, rivers: RiverData[], core: Grid, lc: Landcover | null, open: Structures['waterways'] | null = null) {
+  // the base map has only the brooks that flow in the open, with their real width
+  const lines: { pts: [number, number][]; width: number }[] = open
+    ? open.map((w) => ({ pts: w.pts, width: Math.max(1.2, w.width * (w.cls === 'river' ? 1.5 : 1.1)) }))
+    : rivers.map((r) => ({ pts: r.pts, width: riverWidth(r.name) }));
   const time = { value: 0 };
+  const day = { value: 1 };
   const pos: number[] = [];
   const uv: number[] = [];
   const area = (x: number, z: number) => !!lc && inCore(lc, x, z) && lc.classAt(x, z) === LC.river;
-  for (const r of rivers) {
-    const width = riverWidth(r.name);
+  for (const r of lines) {
+    const width = r.width;
     // densify, then follow the terrain a little above it
     const pts: [number, number][] = [r.pts[0]];
     for (let i = 1; i < r.pts.length; i++) {
@@ -272,13 +300,14 @@ export function createRivers(scene: THREE.Scene, rivers: RiverData[], core: Grid
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    scene.add(new THREE.Mesh(geo, riverMaterial(false, time, lc)));
+    scene.add(new THREE.Mesh(geo, riverMaterial(false, time, day, lc)));
   }
   if (lc) {
     const geo = riverAreas(core, lc, flowField(rivers));
-    if (geo) scene.add(new THREE.Mesh(geo, riverMaterial(true, time, lc)));
+    if (geo) scene.add(new THREE.Mesh(geo, riverMaterial(true, time, day, lc)));
   }
-  return (t: number) => {
+  return (t: number, daylight = 1) => {
     time.value = t;
+    day.value = daylight;
   };
 }

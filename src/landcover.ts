@@ -27,6 +27,8 @@ export interface LcGrid {
 export interface Landcover {
   grids: LcGrid[];
   classAt(x: number, z: number): number;
+  /** How built-up the surroundings are, 0..1 (only in the detailed area, after bakeDensity). */
+  densityAt(x: number, z: number): number;
   /** Stores how built-up each cell's surroundings are: dense old towns get paved, suburbs keep gardens. */
   bakeDensity(roofs: RoofMap): void;
 }
@@ -64,7 +66,7 @@ export async function loadLandcover(baseUrl: string): Promise<Landcover | null> 
   const bakeDensity = (roofs: RoofMap) => {
     const g = grids[0];
     const n = g.count;
-    // roofed share within ~14 m, from a summed-area table of the roof map
+    // roofed share within ~28 m, from a summed-area table of the roof map
     const built = new Float32Array((n + 1) * (n + 1));
     for (let j = 0; j < n; j++) {
       let row = 0;
@@ -75,7 +77,7 @@ export async function loadLandcover(baseUrl: string): Promise<Landcover | null> 
         built[(j + 1) * (n + 1) + i + 1] = built[j * (n + 1) + i + 1] + row;
       }
     }
-    const r = Math.max(1, Math.round(14 / g.res));
+    const r = Math.max(1, Math.round(28 / g.res));
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) {
         const a = Math.max(0, i - r), b = Math.min(n, i + r + 1);
@@ -85,7 +87,13 @@ export async function loadLandcover(baseUrl: string): Promise<Landcover | null> 
       }
     g.texture.needsUpdate = true;
   };
-  return { grids, classAt, bakeDensity };
+  const densityAt = (x: number, z: number) => {
+    const g = grids[0];
+    const i = Math.floor((x - g.x0) / g.res);
+    const j = Math.floor((z - g.z0) / g.res);
+    return i >= 0 && j >= 0 && i < g.count && j < g.count ? g.data[(j * g.count + i) * 2 + 1] / 255 : 0;
+  };
+  return { grids, classAt, densityAt, bakeDensity };
 }
 
 /**
@@ -174,12 +182,13 @@ export function terrainMaterial(lc: Landcover | null, alpine: boolean) {
           } else if (cls == 12) {
             // residential: paved lanes and squares where the houses stand close, gardens with hedges elsewhere
             vec2 cell = floor(p / vec2(17.0, 13.0));
-            float garden = smoothstep(0.6, 0.45, dens + (lh(cell) - 0.5) * 0.2);
+            float garden = smoothstep(0.44, 0.34, dens + (lh(cell) - 0.5) * 0.1);
             vec3 paved = mix(vec3(0.76, 0.73, 0.68), vec3(0.7, 0.67, 0.62), lh(floor(p * 2.2)) * near);
             vec3 lawn = mix(vec3(0.52, 0.75, 0.4), vec3(0.47, 0.68, 0.36), lh(cell + 3.0));
             vec2 f = fract(p / vec2(17.0, 13.0));
             float hedge = (1.0 - smoothstep(0.03, 0.06, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) )) * near;
-            lawn = mix(lawn, vec3(0.25, 0.45, 0.24), hedge * step(0.45, lh(cell + 9.0)));
+            // a few short hedges, not a lattice
+            lawn = mix(lawn, vec3(0.3, 0.5, 0.27), hedge * step(0.8, lh(cell + 9.0)) * step(f.x, 0.5) * 0.7);
             c = mix(paved, lawn, garden);
           } else if (cls == 13 || cls == 21) {
             c = cls == 13 ? mix(vec3(0.66, 0.65, 0.63), vec3(0.6, 0.59, 0.57), n2) : mix(vec3(0.55, 0.5, 0.46), vec3(0.47, 0.43, 0.4), lh(floor(p * 3.0)));
@@ -192,7 +201,7 @@ export function terrainMaterial(lc: Landcover | null, alpine: boolean) {
             c = mix(vec3(0.38, 0.72, 0.3), vec3(0.33, 0.65, 0.27), step(0.5, fract(p.x / 6.0)) * near);
           } else if (cls == 16) {
             // parking: asphalt with painted bays
-            c = mix(vec3(0.47, 0.47, 0.48), vec3(0.92, 0.92, 0.9), lline(p.x / 2.6, 0.04) * step(0.25, fract(p.y / 11.0)) * near);
+            c = mix(vec3(0.2, 0.2, 0.215), vec3(0.85, 0.85, 0.83), lline(p.x / 2.6, 0.03) * step(0.3, fract(p.y / 11.0)) * step(fract(p.y / 11.0), 0.78) * near);
           } else if (cls == 18 || cls == 19) {
             c = vec3(0.42, 0.55, 0.52);
           } else if (cls == 20) {
