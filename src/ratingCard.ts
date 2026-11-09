@@ -1,5 +1,5 @@
 import { chf, type Assignment } from './assignments';
-import type { Rating } from './rating';
+import type { Check, Rating } from './rating';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -97,9 +97,21 @@ export class RatingCard {
 /** The active job in the corner, with its checklist. */
 export class BriefPanel {
   private readonly el = $('brief');
+  /** Opens the studio from the link inside the chip. */
+  onStudio?: () => void;
+
+  constructor() {
+    // tap folds the chip; the studio link opens the studio
+    this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.el.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('#brief-studio')) this.onStudio?.();
+      else this.el.classList.toggle('folded');
+    });
+  }
 
   show(a: Assignment | null, best: number | null, studioKey: string) {
     this.el.hidden = false;
+    this.el.classList.remove('folded');
     if (!a) {
       $('brief-title').textContent = 'Kein Auftrag';
       $('brief-text').textContent = `Aufträge gibt es im Studio (${studioKey}).`;
@@ -112,15 +124,20 @@ export class BriefPanel {
     $('brief-text').textContent = a.brief;
     $('brief-from').textContent = `${a.contact}, ${a.client} · ${chf(a.reward)}`;
     $('brief-best').textContent = best === null ? '' : `Bisher eingereicht: ${starNumber(best)} ★`;
+    $('brief-list').replaceChildren();
+  }
+
+  /** Live checklist: ✓ met, ✗ missing, • not known yet (e.g. camera wishes while flying). */
+  updateChecks(checks: Check[]) {
     const list = $('brief-list');
-    list.replaceChildren(
-      ...requirementLabels(a).map((t) => {
-        const li = document.createElement('li');
-        li.textContent = t;
-        return li;
-      }),
-    );
-    this.el.hidden = false;
+    while (list.children.length < checks.length) list.append(document.createElement('li'));
+    while (list.children.length > checks.length) list.lastElementChild!.remove();
+    checks.forEach((c, i) => {
+      const li = list.children[i] as HTMLElement;
+      const text = `${c.ok === null ? '•' : c.ok ? '✓' : '✗'} ${c.label}`;
+      if (li.textContent !== text) li.textContent = text;
+      li.dataset.state = c.ok === null ? 'open' : c.ok ? 'ok' : 'no';
+    });
   }
 
   set visible(v: boolean) {

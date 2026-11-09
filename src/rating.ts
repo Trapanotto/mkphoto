@@ -286,32 +286,55 @@ function headingOf(camera: THREE.Camera) {
 
 const inHours = (h: number, from: number, to: number) => (from <= to ? h >= from && h < to : h >= from || h < to);
 
-function rateBrief(a: Assignment, views: SubjectView[], ctx: RatingContext): Criterion {
-  const subjectChecks = views.map((v) => ({ ok: v.presence >= 0.5, label: `${v.name} gut sichtbar` }));
-  const other: { ok: boolean; label: string }[] = [];
-  const halfFov = THREE.MathUtils.degToRad(ctx.camera.fov) / 2;
-  const horizonInFrame = Math.abs(Math.tan(-ctx.gimbal) / Math.tan(halfFov)) < 0.95;
+/** What the live checklist knows; without a camera, camera-only wishes stay open (null). */
+export interface CheckContext {
+  camera: THREE.PerspectiveCamera | null;
+  gimbal: number;
+  hour: number;
+  altitude: number;
+  focal: number;
+  portrait: boolean;
+}
 
-  if (a.orientation) {
-    other.push({ ok: (a.orientation === 'portrait') === ctx.portrait, label: a.orientation === 'landscape' ? 'Querformat' : 'Hochformat' });
-  }
+export interface Check {
+  label: string;
+  /** true met, false not met, null not known yet */
+  ok: boolean | null;
+  subject: boolean;
+}
+
+/** Every wish of a job, checked against the current view. Used for the rating and the live checklist. */
+export function requirementChecks(a: Assignment, ctx: CheckContext, subjects: { name: string; presence: number | null }[]): Check[] {
+  const checks: Check[] = subjects.map((s) => ({
+    label: `${s.name} gut sichtbar`,
+    ok: s.presence === null ? null : s.presence >= 0.5,
+    subject: true,
+  }));
+  const cam = ctx.camera;
+  const add = (label: string, ok: boolean | null) => checks.push({ label, ok, subject: false });
+  const horizonInFrame = cam ? Math.abs(Math.tan(-ctx.gimbal) / Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2)) < 0.95 : null;
+
+  if (a.orientation) add(a.orientation === 'landscape' ? 'Querformat' : 'Hochformat', cam ? (a.orientation === 'portrait') === ctx.portrait : null);
   if (a.heading) {
-    const hd = headingOf(ctx.camera);
-    other.push({ ok: hd >= a.heading.from && hd <= a.heading.to && (!a.horizon || horizonInFrame), label: a.heading.label });
-  } else if (a.horizon) {
-    other.push({ ok: horizonInFrame, label: 'Horizont im Bild' });
-  }
-  if (a.hours) other.push({ ok: inHours(ctx.hour, a.hours.from, a.hours.to), label: a.hours.label });
-  if (a.gimbalMax) other.push({ ok: THREE.MathUtils.radToDeg(ctx.gimbal) <= a.gimbalMax.deg, label: a.gimbalMax.label });
-  if (a.altitudeMax) other.push({ ok: ctx.altitude <= a.altitudeMax.m, label: a.altitudeMax.label });
-  if (a.focalMin) other.push({ ok: ctx.focal >= a.focalMin.mm, label: a.focalMin.label });
+    const ok = cam ? (() => { const hd = headingOf(cam); return hd >= a.heading!.from && hd <= a.heading!.to && (!a.horizon || !!horizonInFrame); })() : null;
+    add(a.heading.label, ok);
+  } else if (a.horizon) add('Horizont im Bild', horizonInFrame);
+  if (a.hours) add(a.hours.label, inHours(ctx.hour, a.hours.from, a.hours.to));
+  if (a.gimbalMax) add(a.gimbalMax.label, cam ? THREE.MathUtils.radToDeg(ctx.gimbal) <= a.gimbalMax.deg : null);
+  if (a.altitudeMax) add(a.altitudeMax.label, ctx.altitude <= a.altitudeMax.m);
+  if (a.focalMin) add(a.focalMin.label, cam ? ctx.focal >= a.focalMin.mm : null);
+  return checks;
+}
 
+function rateBrief(a: Assignment, views: SubjectView[], ctx: RatingContext): Criterion {
+  const checks = requirementChecks(a, ctx, views.map((v) => ({ name: v.name, presence: v.presence })));
+  const subjectChecks = checks.filter((c) => c.subject);
+  const other = checks.filter((c) => !c.subject);
   // subjects carry 40 %, all other wishes share the rest
   const subjectShare = other.length ? 0.4 : 1;
   const score =
     (subjectChecks.filter((c) => c.ok).length / Math.max(1, subjectChecks.length)) * subjectShare +
     (other.length ? (other.filter((c) => c.ok).length / other.length) * (1 - subjectShare) : 0);
-  const checks = [...subjectChecks, ...other];
   const missing = checks.filter((c) => !c.ok);
   return {
     key: 'brief',

@@ -1483,3 +1483,91 @@ body[data-mode='camera'] #scene {
     top: calc(max(12px, env(safe-area-inset-top)) + 96px);
   }
 }
+
+/* =====================================================================
+   Job chip with live checklist
+   ===================================================================== */
+
+.brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#brief-studio {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: 700 11px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.brief-list {
+  list-style: none;
+  padding-left: 0 !important;
+}
+
+.brief-list li {
+  margin: 1px 0;
+}
+
+.brief-list li[data-state='ok'] {
+  color: #7be08a;
+}
+
+.brief-list li[data-state='no'] {
+  color: #ff8a7a;
+}
+
+.brief-list li[data-state='open'] {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* folded: just the title */
+.brief.folded #brief-text,
+.brief.folded .brief-from,
+.brief.folded .brief-list,
+.brief.folded .brief-best {
+  display: none !important;
+}
+
+@media (pointer: coarse) {
+  /* phones: title in full and the checklist always visible; the long text stays in the studio */
+  .brief .brief-list {
+    display: block !important;
+    margin: 3px 0 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .brief b {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+  }
+
+  .brief {
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  .brief.folded .brief-list {
+    display: none !important;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 600px) {
+  .brief {
+    max-width: 64vw;
+  }
+}
+
+/* camera hint sits above the zoom chips, away from the job checklist */
+.cam-hint,
+body .cam-hint {
+  top: auto;
+  bottom: calc(max(28px, env(safe-area-inset-bottom)) + 136px);
+}

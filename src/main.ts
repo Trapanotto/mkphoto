@@ -13,7 +13,7 @@ import { OutlineRenderer } from './outline';
 import { PhotoCamera } from './photoCamera';
 import { savePhoto } from './photos';
 import { LEVELS, Quality } from './quality';
-import { analyseSubject, ratePhoto, type Rating } from './rating';
+import { analyseSubject, ratePhoto, requirementChecks, type Rating, type SubjectView } from './rating';
 import { BriefPanel, RatingCard, type Offer } from './ratingCard';
 import { deleteGame, loadGame, newGame, storeGame, type SaveGame } from './save';
 import { Sky } from './sky';
@@ -245,7 +245,7 @@ async function start() {
     button.addEventListener('pointerdown', (e) => e.stopPropagation());
     button.addEventListener('click', () => input.trigger(action));
   }
-  $('brief').addEventListener('click', () => studio.open());
+  brief.onStudio = () => studio.open();
   for (const b of document.querySelectorAll<HTMLButtonElement>('.zoom-chips button')) {
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
     b.addEventListener('click', () => photo.setZoom(Number(b.dataset.zoom)));
@@ -285,6 +285,24 @@ async function start() {
   }
 
   let capturing = false;
+
+  /** Live ✓/✗ for the active job: camera wishes are known in the photo camera only. */
+  function updateChecklist(views: SubjectView[] | null) {
+    const job = activeJob();
+    if (!job) return;
+    const subjects = job.subjects.map((id) => {
+      const lm = world.landmarks.find((l) => l.id === id);
+      const v = views?.find((x) => x.id === id);
+      return { name: lm?.name ?? id, presence: v ? v.presence : null };
+    });
+    brief.updateChecks(
+      requirementChecks(
+        job,
+        { camera: photo.active ? photo.camera : null, gimbal: photo.gimbal, hour: clock.hour, altitude: drone.altitude, focal: photo.focal, portrait: photo.portrait },
+        subjects,
+      ),
+    );
+  }
   refreshJob();
 
   // handle for poking at the game from the browser console during development
@@ -432,10 +450,16 @@ async function start() {
       if (time - lastMarks > 100) {
         lastMarks = time;
         const frame = photo.frameNdc();
-        photo.showMarks(marked.map((lm) => analyseSubject(lm, photo.camera, world.obstacles, frame)));
+        const views = marked.map((lm) => analyseSubject(lm, photo.camera, world.obstacles, frame));
+        photo.showMarks(views);
+        updateChecklist(views);
       }
     } else {
       drone.update(dt, c, localWind, world);
+      if (time - lastMarks > 250) {
+        lastMarks = time;
+        updateChecklist(null);
+      }
     }
 
     if (menu.isOpen) {
