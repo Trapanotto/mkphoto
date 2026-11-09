@@ -12,10 +12,13 @@ import { toon } from './toon';
 
 export { heightAt };
 
-/** Start pad on the quay south of the bridge, between river and Bahnhofstrasse. */
-export const HOME = new THREE.Vector3(24, 0, 79);
-/** Heading at the start: looking at the bridge. */
-export const HOME_YAW = Math.atan2(24, 79);
+/**
+ * Launch pad on the quay south of the river: a spot with no road, path, building or tree
+ * within reach of the platform (checked against the swissTLM3D routes and the roof map).
+ */
+export const HOME = new THREE.Vector3(12, 0, 86);
+/** Heading at the start: looking at the Wasserturm and the bridge. */
+export const HOME_YAW = Math.atan2(19, 48);
 export const FLIGHT_RADIUS = 650;
 export const MAX_ALTITUDE = 120;
 

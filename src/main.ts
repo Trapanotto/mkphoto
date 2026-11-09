@@ -166,17 +166,12 @@ async function start() {
     started = true;
     updateWallet();
     showHelp(true);
-    if (!game.introSeen) {
-      intro.open();
-      return;
-    }
-    if (!game.activeJob) studio.open();
+    if (!game.introSeen) intro.open();
   }
 
   intro.onDone = () => {
     game.introSeen = true;
     save();
-    studio.open();
   };
 
   menu.onAction = (action) => {
@@ -226,9 +221,10 @@ async function start() {
         break;
     }
   };
-  menu.setHasSave(hasSave, false);
+  menu.setHasSave(hasSave, true);
   syncMenuLabels();
-  menu.open();
+  // straight into Luzern; the menu is one tap away
+  menu.close();
 
   // --- Buttons -------------------------------------------------------------------
 
@@ -270,7 +266,6 @@ async function start() {
   function showHelp(on: boolean) {
     document.body.dataset.help = on ? 'on' : 'off';
     clearTimeout(helpTimer);
-    if (on) helpTimer = window.setTimeout(() => (document.body.dataset.help = 'off'), 15000);
   }
   if (new URLSearchParams(location.search).has('debug')) document.body.dataset.debug = 'on';
   setCamera(false);
@@ -304,6 +299,7 @@ async function start() {
     );
   }
   refreshJob();
+  beginPlay();
 
   // handle for poking at the game from the browser console during development
   if (import.meta.env.DEV) {

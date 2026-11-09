@@ -104,7 +104,7 @@ export class BriefPanel {
     // tap folds the chip; the studio link opens the studio
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.el.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('#brief-studio')) this.onStudio?.();
+      if ((e.target as HTMLElement).closest('#brief-studio, #brief-new')) this.onStudio?.();
       else this.el.classList.toggle('folded');
     });
   }
@@ -112,6 +112,7 @@ export class BriefPanel {
   show(a: Assignment | null, best: number | null, studioKey: string) {
     this.el.hidden = false;
     this.el.classList.remove('folded');
+    this.el.classList.toggle('empty', !a);
     if (!a) {
       $('brief-title').textContent = 'Kein Auftrag';
       $('brief-text').textContent = `Aufträge gibt es im Studio (${studioKey}).`;
