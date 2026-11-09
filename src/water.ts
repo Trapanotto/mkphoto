@@ -15,7 +15,7 @@ export interface Water {
 const RES = 2.5;
 
 /** Distance from every water cell to the nearest shore or structure, in metres (0..60). */
-function shoreDistance(half: number, cx: number, cz: number, solids: ((x: number, z: number) => boolean)[]) {
+function shoreDistance(half: number, cx: number, cz: number, solids: ((x: number, z: number) => boolean)[], wet: (x: number, z: number) => boolean = isWater) {
   const n = Math.round((half * 2) / RES) + 1;
   const big = 1e6;
   const d = new Float32Array(n * n);
@@ -23,7 +23,7 @@ function shoreDistance(half: number, cx: number, cz: number, solids: ((x: number
     for (let i = 0; i < n; i++) {
       const x = cx - half + i * RES;
       const z = cz - half + j * RES;
-      const land = !isWater(x, z) || solids.some((f) => f(x, z));
+      const land = !wet(x, z) || solids.some((f) => f(x, z));
       d[j * n + i] = land ? 0 : big;
     }
   // two-pass chamfer distance transform
@@ -65,7 +65,8 @@ function shoreDistance(half: number, cx: number, cz: number, solids: ((x: number
  * size: edge of the water plane. core: the detailed grid the shore distances are computed on.
  * lakeOnly: draw water only over lake cells (a mountain lake high above a dry valley).
  */
-export function createWater(size: number, core: Grid, solids: ((x: number, z: number) => boolean)[], lakeOnly = false): Water {
+/** lakeShape: the exact lake outline (from the land cover), used instead of the height grid's water cells. */
+export function createWater(size: number, core: Grid, solids: ((x: number, z: number) => boolean)[], lakeOnly = false, lakeShape?: (x: number, z: number) => boolean): Water {
   const coreHalf = core.size / 2;
   const deep = new THREE.Color('#2a7fd4');
   const shallow = new THREE.Color();
@@ -86,7 +87,7 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
       uFoam: { value: foam },
     },
   ]);
-  uniforms.uDist.value = shoreDistance(coreHalf, core.center.x, core.center.z, solids);
+  uniforms.uDist.value = shoreDistance(coreHalf, core.center.x, core.center.z, solids, lakeShape);
   // keep our colour objects (merge clones them)
   uniforms.uDeep.value = deep;
   uniforms.uShallow.value = shallow;
@@ -172,7 +173,8 @@ export function createWater(size: number, core: Grid, solids: ((x: number, z: nu
         bool inside = all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)));
         float dist = inside ? texture2D(uDist, uv).r * 60.0 : 60.0;
         // a mountain lake: no water outside the lake itself
-        if (uLakeOnly > 0.5 && (!inside || dist < 0.01)) discard;
+        // the edge runs along the interpolated distance, so it is smooth instead of stepped
+        if (uLakeOnly > 0.5 && (!inside || dist < 1.2)) discard;
         float fade = 1.0 - smoothstep(180.0, 650.0, vViewDist);
         vec2 drift = uWind * uTime * 0.6;
 

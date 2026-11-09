@@ -83,9 +83,9 @@ export function wallMaterial() {
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec4 aWall;\nattribute float aSeed;\nvarying vec4 vWall;\nvarying float vSeed;',
+        '#include <common>\nattribute vec4 aWall;\nattribute float aSeed;\nattribute vec2 aStyle;\nvarying vec4 vWall;\nvarying float vSeed;\nvarying vec2 vStyle;',
       )
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvSeed = aSeed;');
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvSeed = aSeed;\nvStyle = aStyle;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -93,6 +93,7 @@ export function wallMaterial() {
         uniform float uNight;
         varying vec4 vWall;
         varying float vSeed;
+        varying vec2 vStyle;
         float hash3(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
         float box(vec2 p, vec2 a, vec2 b, vec2 aa) {
           vec2 s = smoothstep(a - aa, a + aa, p) * (1.0 - smoothstep(b - aa, b + aa, p));
@@ -103,6 +104,47 @@ export function wallMaterial() {
         '#include <color_fragment>',
         /* glsl */ `#include <color_fragment>
         float u = vWall.x, h = vWall.y, rest = vWall.z, roof = vWall.w;
+        int style = int(vStyle.x + 0.5);
+        float far = smoothstep(180.0, 420.0, length(vViewPosition));
+        float lit = 0.0;
+        if (style == 1 || style == 2) {
+          // stone landmarks: ashlar courses, Gothic lancet windows (1) or castle slits (2)
+          float rows = h / (style == 1 ? 0.55 : 0.75);
+          float row = floor(rows);
+          float bu = u / (style == 1 ? 1.15 : 0.9) + mod(row, 2.0) * 0.5;
+          vec2 aa2 = fwidth(vec2(bu, rows));
+          float joint = max(1.0 - smoothstep(0.0, aa2.y * 1.5, min(fract(rows), 1.0 - fract(rows))), 1.0 - smoothstep(0.0, aa2.x * 1.5, min(fract(bu), 1.0 - fract(bu))));
+          float tone = hash3(vec3(floor(bu), row, 3.0));
+          diffuseColor.rgb *= (style == 1 ? 0.93 : 0.86) + tone * (style == 1 ? 0.1 : 0.2);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.72, joint * 0.6 * (1.0 - far));
+          float bay = u / 6.5;
+          float bx = fract(bay) - 0.5;
+          float wall = step(0.9, rest) * step(1.5, roof);
+          if (style == 1) {
+            // buttresses between the bays, tall pointed windows with tracery between them
+            diffuseColor.rgb *= 1.0 - 0.12 * (1.0 - smoothstep(0.04, 0.07, 0.5 - abs(bx)));
+            float top = max(min(h + roof - 3.0, 15.0), 6.0);
+            float py = h - (top - 1.6);
+            float wdt = py < 0.0 ? 0.11 : 0.11 * sqrt(max(0.0, 1.0 - py / 1.6));
+            float lancet = step(abs(bx), wdt) * step(3.2, h) * step(h, top);
+            float mullion = 1.0 - smoothstep(0.008, 0.016, abs(bx));
+            float tracery = step(top - 2.2, h) * (1.0 - smoothstep(0.02, 0.05, abs(length(vec2(bx * 6.5, (h - top + 1.4))) - 0.45)));
+            float glassMask = lancet * wall * (1.0 - far);
+            vec3 stained = mix(vec3(0.16, 0.2, 0.32), vec3(0.32, 0.18, 0.22), hash3(vec3(floor(bay), floor(h * 1.5), 5.0)));
+            diffuseColor.rgb = mix(diffuseColor.rgb, stained, glassMask * (1.0 - max(mullion, tracery) * 0.85));
+            lit = glassMask * uNight * 0.6;
+          } else {
+            // castle: few small windows and arrow slits, unevenly spread
+            vec2 cell = vec2(u / 4.2, h / 3.6);
+            vec2 f = fract(cell);
+            float k = hash3(vec3(floor(cell), vSeed));
+            float small = box(f, vec2(0.38, 0.3), vec2(0.62, 0.72), fwidth(cell) * 1.2) * step(0.55, k);
+            float slit = box(f, vec2(0.47, 0.2), vec2(0.53, 0.8), fwidth(cell) * 1.2) * step(k, 0.25);
+            float m = max(small, slit) * wall * step(2.0, h) * (1.0 - far);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.09, 0.09), m);
+            lit = small * wall * uNight * step(0.75, k);
+          }
+        } else {
         float modern = step(0.5, fract(abs(vSeed) * 7.0)) * step(24.0, h + roof);
         float floorH = mix(3.1, 3.6, modern);
         float colW = mix(2.7, 3.0, modern);
@@ -113,22 +155,43 @@ export function wallMaterial() {
         bool ground = id.y < 1.0;
         // keep a margin to corners and to the roof
         float inWall = step(0.0, vSeed) * step(0.9, rest) * step(0.6, h) * step(1.2, roof);
+        float arcade = step(2.5, vStyle.x);
+        float near = 1.0 - far;
+        // a stone plinth, a cornice under the eaves and thin cornices between floors
+        float plinth = (1.0 - modern) * step(h, 0.75);
+        float cornice = (1.0 - modern) * (1.0 - smoothstep(0.25, 0.32, roof)) * step(0.0, vSeed);
+        float course = (1.0 - modern) * step(1.0, id.y) * (1.0 - smoothstep(0.0, aa.y * 1.5 + 0.015, min(f.y, 1.0 - f.y))) * near * step(0.0, vSeed);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, plinth);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.8, cornice);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.08 + 0.03, course * 0.8);
+        float door = ground ? box(f, vec2(0.3, 0.0), vec2(0.7, 0.72), aa) * step(hash3(vec3(id, vSeed + 4.0)), 0.18) : 0.0;
         float win = ground
-          ? box(f, vec2(0.1, 0.08), vec2(0.9, 0.7), aa)
+          ? box(f, vec2(0.1, 0.08), vec2(0.9, 0.7), aa) * (1.0 - step(hash3(vec3(id, vSeed + 4.0)), 0.18))
           : modern > 0.5 ? box(f, vec2(0.08, 0.22), vec2(0.92, 0.86), aa) : box(f, vec2(0.3, 0.26), vec2(0.7, 0.8), aa);
         float frame = ground ? 0.0 : box(f, vec2(0.26, 0.22), vec2(0.74, 0.84), aa) - win;
+        float sill = (ground || modern > 0.5) ? 0.0 : box(f, vec2(0.24, 0.17), vec2(0.76, 0.22), aa);
         float shutter = (ground || modern > 0.5) ? 0.0 : box(f, vec2(0.14, 0.26), vec2(0.28, 0.8), aa) + box(f, vec2(0.72, 0.26), vec2(0.86, 0.8), aa);
-        win *= inWall; frame *= inWall; shutter *= inWall;
+        // Bern's Lauben: round arches over a shaded walkway on the ground floor
+        float arch = 0.0;
+        float hg = vStyle.y;
+        if (arcade > 0.5 && hg < 3.6 && hg > -0.5) {
+          float ax = fract(u / 4.0) - 0.5;
+          arch = step(abs(ax), 0.38) * step(hg, 2.3 + sqrt(max(0.0, 0.1444 - ax * ax)) * 2.6);
+          win = 0.0; door = 0.0; plinth = 0.0;
+        }
+        win *= inWall; frame *= inWall; shutter *= inWall; door *= inWall; sill *= inWall;
         // fade the pattern out far away, where it would only flicker
-        float far = smoothstep(180.0, 420.0, length(vViewPosition));
-        win *= 1.0 - far; frame *= 1.0 - far; shutter *= 1.0 - far;
+        win *= near; frame *= near; shutter *= near; door *= near; sill *= near;
         float s = hash3(vec3(vSeed, 1.0, 2.0));
         vec3 shutterCol = s < 0.33 ? vec3(0.16, 0.36, 0.2) : s < 0.66 ? vec3(0.45, 0.14, 0.1) : vec3(0.35, 0.24, 0.14);
         vec3 glass = mix(vec3(0.12, 0.16, 0.22), vec3(0.32, 0.42, 0.52), smoothstep(0.0, 1.0, f.y));
         diffuseColor.rgb = mix(diffuseColor.rgb, shutterCol, shutter);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.93, 0.88), frame);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.93, 0.88), max(frame, sill));
         diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
-        float lit = step(hash3(vec3(id, vSeed)), ground ? 0.55 : 0.38) * win * uNight;`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.3, 0.2, 0.13), shutterCol, 0.4), door);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.17, 0.15), arch * near);
+        lit = step(hash3(vec3(id, vSeed)), ground ? 0.55 : 0.38) * win * uNight + arch * uNight * 0.5;
+        }`,
       )
       .replace(
         '#include <emissivemap_fragment>',

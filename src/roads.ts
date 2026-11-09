@@ -91,6 +91,71 @@ function heights(pts: [number, number][], name: string | null, lakeBridges: bool
   return { y, bridged: water, hasDeck: true };
 }
 
+/** Lane markings on roads, cobbles in lanes, slabs on pavements and squares, gravel on paths. */
+function roadMaterial() {
+  const m = toon('#ffffff');
+  m.vertexColors = true;
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 aRoad;\nvarying vec4 vRoad;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRoad = aRoad;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec4 vRoad;
+        float rh2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float joints(vec2 q, float w) {
+          vec2 f = abs(fract(q) - 0.5);
+          vec2 fw = fwidth(q);
+          return max(smoothstep(0.5 - w - fw.x, 0.5 - w, f.x), smoothstep(0.5 - w - fw.y, 0.5 - w, f.y));
+        }`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          float along = vRoad.x, across = vRoad.y, width = vRoad.w;
+          int kind = int(vRoad.z + 0.5);
+          float near = 1.0 - smoothstep(90.0, 220.0, length(vViewPosition));
+          vec3 c = diffuseColor.rgb;
+          if (kind == 0) {
+            float side = across * width * 0.5;
+            // patched asphalt, a dashed centre line and solid edge lines on wider roads
+            c *= 0.95 + 0.08 * rh2(floor(vec2(along / 3.0, across * 2.0)));
+            float centre = step(5.5, width) * (1.0 - smoothstep(0.06, 0.09, abs(side))) * step(fract(along / 9.0), 0.45);
+            float edge = step(6.5, width) * (1.0 - smoothstep(0.06, 0.09, abs(abs(side) - (width * 0.5 - 0.45))));
+            c = mix(c, vec3(0.93, 0.93, 0.9), max(centre, edge) * near);
+          } else if (kind == 1) {
+            // cobblestones in staggered rows
+            vec2 q = vec2(along / 0.32, across * width * 0.5 / 0.3);
+            q.x += mod(floor(q.y), 2.0) * 0.5;
+            float tone = rh2(floor(q));
+            c *= 0.9 + 0.16 * tone * near;
+            c = mix(c, c * 0.72, joints(q, 0.1) * near);
+          } else if (kind == 2) {
+            vec2 q = vec2(along / 0.9, across * width * 0.5 / 0.6);
+            q.x += mod(floor(q.y), 2.0) * 0.5;
+            c *= 0.95 + 0.07 * rh2(floor(q)) * near;
+            c = mix(c, c * 0.8, joints(q, 0.03) * near);
+          } else if (kind == 3) {
+            // gravel, darker along the worn edges
+            c *= 0.92 + 0.14 * rh2(floor(vec2(along, across * width) * 6.0)) * near;
+            c *= 1.0 - 0.12 * smoothstep(0.65, 1.0, abs(across));
+          } else if (kind == 4) {
+            vec2 q = vec2(along / 0.5, across / 0.5);
+            c = mix(c, c * 0.82, joints(q, 0.04) * near);
+          } else if (kind == 6) {
+            c = mix(c, c * 0.75, smoothstep(0.0, fwidth(along / 12.0) + 0.002, abs(fract(along / 12.0) - 0.5) - 0.48) * near);
+          }
+          diffuseColor.rgb = c;
+        }`,
+      );
+  };
+  m.customProgramCacheKey = () => 'road-surface';
+  return m;
+}
+
 const mat4 = (x: number, y: number, z: number, yaw: number, sx = 1, sy = 1, sz = 1) =>
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(sx, sy, sz));
 
@@ -104,7 +169,13 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
   const routes: Route[] = [];
   const pos: number[] = [];
   const col: number[] = [];
+  /** Per vertex: distance along, position across (-1..1, or metres on pavements), surface kind, width. */
+  const att: number[] = [];
   const deckPos: number[] = [];
+  const surf = (A: number, B: number, across: number[], kind: number, width: number) => {
+    const along = [A, A, B, A, B, B];
+    for (let k = 0; k < 6; k++) att.push(along[k], across[k], kind, width);
+  };
 
   const quad = (list: number[], a: number[], b: number[], c: number[], d: number[]) => list.push(...a, ...b, ...c, ...a, ...c, ...d);
 
@@ -148,6 +219,8 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
       // counter-clockwise seen from above, so the surface faces up
       quad(pos, corners[0], corners[1], corners[2], corners[3]);
       for (let k = 0; k < 6; k++) col.push(c.r, c.g, c.b);
+      const kind = onDeck ? 6 : cls.surface === 'asphalt' && r.kind === 'car' ? 0 : pedestrianZone && (r.type === 10 || r.type === 20) ? 2 : cls.surface === 'path' ? 3 : 1;
+      surf(dist[i], dist[i + 1], [-1, 1, 1, -1, 1, -1], kind, cls.width);
       if (r.kind === 'car' && !onDeck) {
         // pavements on both sides, a little higher than the road, with a kerb
         for (const s of [-1, 1]) {
@@ -159,9 +232,11 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
           const walk = s > 0 ? [inner[0], outer[0], outer[1], inner[1]] : [outer[0], inner[0], inner[1], outer[1]];
           quad(pos, walk[0], walk[1], walk[2], walk[3]);
           for (let k = 0; k < 6; k++) col.push(SURFACE.pavement.r, SURFACE.pavement.g, SURFACE.pavement.b);
+          surf(dist[i], dist[i + 1], s > 0 ? [0, 2, 2, 0, 2, 0] : [2, 0, 0, 2, 0, 2], 4, 2);
           const kq = s > 0 ? [kerb[0], inner[0], inner[1], kerb[1]] : [inner[0], kerb[0], kerb[1], inner[1]];
           quad(pos, kq[0], kq[1], kq[2], kq[3]);
           for (let k = 0; k < 6; k++) col.push(SURFACE.kerb.r, SURFACE.kerb.g, SURFACE.kerb.b);
+          surf(dist[i], dist[i + 1], [0, 0, 0, 0, 0, 0], 5, 0);
         }
       }
       if (onDeck) {
@@ -209,9 +284,9 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(att, 4));
   geo.computeVertexNormals();
-  const mat = toon('#ffffff');
-  mat.vertexColors = true;
+  const mat = roadMaterial();
   mat.side = THREE.DoubleSide;
   mat.polygonOffset = true;
   mat.polygonOffsetFactor = -2;

@@ -7,13 +7,14 @@ import { createRails, createTrain } from './rails';
 import { createRivers, riverMask } from './rivers';
 import { createLandmarks, type Landmark } from './landmarks';
 import type { Region } from './regions';
-import { buildings3dMesh, RoofMap, type Buildings3d } from './buildings3d';
+import { buildings3dMesh, RoofMap, type BuildingStyle, type Buildings3d } from './buildings3d';
 import { ObstacleIndex, Tower } from './obstacles';
 import { createRoads, type Route } from './roads';
 import { createWater } from './water';
 import { addHull } from './outline';
 import { heightAt, isWater, terrainAt, type Grid, type TerrainData } from './terrain';
 import { toon } from './toon';
+import { LC, terrainMaterial } from './landcover';
 
 export { heightAt };
 
@@ -66,6 +67,9 @@ function terrainMesh(
   grid: Grid,
   colorAt: (h: number, steep: number, x: number, z: number) => THREE.Color,
   finer: Grid[],
+  material: THREE.Material,
+  /** True on river areas: the ground there sinks a little under the river water. */
+  river: (x: number, z: number) => boolean = () => false,
 ) {
   const segments = grid.count - 1;
   const geo = new THREE.PlaneGeometry(grid.size, grid.size, segments, segments);
@@ -79,6 +83,7 @@ function terrainMesh(
     const z = pos.getZ(i);
     let h = grid.heights[i];
     if (isWater(x, z)) h = Math.min(h, -1.5);
+    else if (river(x, z)) h -= 0.9;
     if (covered(x, z)) h -= Math.max(25, grid.step * 0.8);
     pos.setY(i, h);
   }
@@ -91,9 +96,7 @@ function terrainMesh(
     (isWater(x, z) ? SHORE : colorAt(grid.heights[i], 1 - normals.getY(i), x, z)).toArray(colors, i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const mat = toon('#ffffff');
-  mat.vertexColors = true;
-  const mesh = new THREE.Mesh(geo, mat);
+  const mesh = new THREE.Mesh(geo, material);
 
   // skirt: walls down from the outer edge, hiding gaps to the coarser grid below
   const n = grid.count;
@@ -217,6 +220,22 @@ function bridgeDistance(x: number, z: number) {
   return best;
 }
 
+/** Landmarks in stone, and the arcades of Bern's old town. */
+function buildingStyle(id: Region['id']) {
+  return (x: number, z: number, type: string): BuildingStyle => {
+    const d = Math.hypot(x, z);
+    if (id === 'bern') {
+      if (d < 50 && type.startsWith('Sakral')) return 1;
+      // the old town on the Aare peninsula: arcades along the long east-west streets
+      if (x > -900 && x < 480 && z > -260 && z < 110 && d > 50) return 3;
+    }
+    if (id === 'chillon' && d < 75) return 2;
+    if (id === 'lenzburg' && d < 70) return 2;
+    if (type.startsWith('Sakral') && d < 400) return 1;
+    return 0;
+  };
+}
+
 /** 1 by day, 0 at night; set by the time of day. */
 export const daylightLevel = { value: 1 };
 const daylight = () => daylightLevel.value;
@@ -233,8 +252,14 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   // --- Terrain: every grid, the coarser ones sinking under the finer ---------------
   const c = new THREE.Color();
   const palette = region.style === 'alpine' ? alpineColors(c, base) : cityColors(c, base, region.water.mode === 'below');
+  const lc = data.landcover;
+  const terrainMat = terrainMaterial(lc, region.style === 'alpine');
+  const plainMat = terrainMaterial(null, false);
+  const onRiver = lc ? (x: number, z: number) => lc.classAt(x, z) === LC.river : undefined;
   data.grids.forEach((grid, i) => {
-    scene.add(terrainMesh(grid, palette(i === 0), data.grids.slice(0, i)));
+    // land cover reaches over the detailed and the middle grid
+    const covered = lc && i < 2;
+    scene.add(terrainMesh(grid, palette(i === 0), data.grids.slice(0, i), covered ? terrainMat : plainMat, i === 0 ? onRiver : undefined));
   });
 
   // --- Water: one cel-shaded plane at the base level; structures count as shore for the foam ---
@@ -247,6 +272,7 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
     data.core,
     shoreSolids,
     region.waterPlane === 'lake',
+    region.waterPlane === 'lake' && lc ? (x: number, z: number) => lc.classAt(x, z) === LC.lake && Math.abs(terrainAt(x, z)) < 2.5 : undefined,
   );
   scene.add(water.mesh);
   const lake = water;
@@ -254,13 +280,14 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   // --- Buildings and landmarks -----------------------------------------------------
   // buildings from swissBUILDINGS3D; their roofs also drive collision
   const roofMap = new RoofMap(data.core.size / 2, data.core.center.x, data.core.center.z);
-  scene.add(buildings3dMesh(houses, roofMap));
+  scene.add(buildings3dMesh(houses, roofMap, buildingStyle(region.id)));
   obstacles.roofs = roofMap;
+  lc?.bakeDensity(roofMap);
   const windows = new THREE.MeshBasicMaterial({ color: '#3a2a22' });
-  const routes = createRoads(scene, data.roads, obstacles, windows, region.id === 'luzern', riverMask(data.rivers));
+  const routes = createRoads(scene, data.roads, obstacles, windows, region.id === 'luzern', riverMask(data.rivers, lc));
   // railways (viaducts included), rivers and a train where the region has them
   const rail = createRails(scene, data.rails, obstacles);
-  const updateRivers = createRivers(scene, data.rivers);
+  const updateRivers = createRivers(scene, data.rivers, data.core, lc);
   const updateTrain = region.ambient.train ? createTrain(scene, rail.tracks, region.ambient.train) : () => {};
 
   let landmarks: Landmark[];
@@ -275,7 +302,10 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
     const deck = rail.bridges.slice().sort((a, b) => b.length - a.length)[0] ?? [];
     landmarks = [lineLandmark(deck, 60, 'landwasserviadukt', 'Landwasserviadukt')].filter((l): l is Landmark => !!l);
   }
-  const ambient = createAmbient(scene, data, routes, obstacles, density, region);
+  // no trees in rivers or pools (bridge decks and boats look like trees in the surface model)
+  const wet: number[] = [LC.river, LC.lake, LC.pool];
+  const trees = lc ? data.trees.filter(([x, z]) => !wet.includes(lc.classAt(x, z))) : data.trees;
+  const ambient = createAmbient(scene, { trees }, routes, obstacles, density, region);
   let clock = 0;
 
   // --- Launch pad: a raised platform with the MKPHOTO mark, above the quay's road surface ----

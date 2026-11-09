@@ -8,6 +8,7 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 
 - **M0 Grundgerüst:** Vite + TypeScript + three.js, automatisches Deployment auf GitHub Pages
 - **M1 Fliegen:** Flugmodell mit Assist- und Pro-Modus, Follow-Kamera, Akku (12 min, Laden auf dem Startplatz), Wind mit Böen, Flugverbot über 120 m und ausserhalb des Gebiets
+- **Detail-Durchgang 2:** Bodenbedeckung aus der swisstopo-Basiskarte (Wald, Felder, Gärten, Reben, Obstgärten, Friedhöfe, Sportplätze, Parkplätze, Fels, Gletscher), Flüsse als echte Wasserflächen mit Uferschaum, Seeufer nach Bodenbedeckung; Häuser mit Sockel, Gesimsen, Türen, Fensterbänken, Ziegelreihen, Kaminen und Solaranlagen; Wahrzeichen aus Sandstein mit Lanzettfenstern, Fialen und glasiertem Rautendach (Berner Münster) bzw. Burgmauerwerk (Chillon, Lenzburg); Lauben in der Berner Altstadt; Strassen mit Markierungen, Pflaster, Platten und Kies
 - **Regionen Château de Chillon, Landwasserviadukt, Berner Münster, Aarau Kettenbrücke, Schloss Lenzburg:** generischer Import (`tools/regions/<id>.json`) mit Gelände, Strassen, Bahnlinien (Viadukte, Züge), Flüssen (Aare, Landwasser) und Bäumen aus swisstopo, Strassenbrücken über Täler und Flüsse, je drei Aufträge; Wechsel im Menü unter „Region wechseln“ oder mit `?region=<id>`
 - **Region Matterhorn:** Riffelsee, Gornergrat und Matterhorn aus swisstopo-Höhendaten (vier Raster von 10 m bis 250 m), Gebäude aus swissBUILDINGS3D, Wanderwege aus swissTLM3D, alpine Farben, Alpendohlen, fünf eigene Aufträge; Region wechseln im Menü oder mit `?region=zermatt`
 - **Detail-Durchgang:** Gebäude aus swissBUILDINGS3D (2830 Gebäude mit echten Dachformen, Fenster und Nachtlicht), Strassen, Wege und Brückenplatten aus swissTLM3D mit Gehwegen, 2725 Bäume an echten Standorten, Passanten, Autos und Busse, Schwäne, Enten, Möwen, Dampfschiff und Motorboote, detaillierte Kapellbrücke und Wasserturm, gezeichnetes Wasser mit Uferschaum und Wellenlinien
@@ -65,7 +66,10 @@ Weitere Regionen (chillon, landwasser, bern, aarau, lenzburg) laufen über den g
 ```bash
 node tools/import-region.mjs bern
 node tools/import-buildings3d.mjs bern
+node tools/import-landcover.mjs bern
 ```
+
+`import-landcover.mjs` liest die Vektorkacheln der swisstopo-Basiskarte (Bodenbedeckung, Landnutzung, Gewässerflächen) und schreibt pro Region ein Klassenraster (`landcover-*.bin.gz`).
 
 Lädt swissBUILDINGS3D (DXF) und schreibt die Gebäude als komprimierte Dreiecksliste. Daten: © swisstopo.
 

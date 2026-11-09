@@ -4,6 +4,8 @@
  * Heights are metres relative to the region's base level (Lake Lucerne, Riffelsee).
  */
 
+import { loadLandcover, type Landcover } from './landcover';
+
 export interface GridInfo {
   name: string;
   file: string;
@@ -167,6 +169,8 @@ export interface TerrainData {
   far: Grid;
   roads: RoadData[];
   trees: TreeData[];
+  /** Land cover classes from the swisstopo base map, if the region has them. */
+  landcover: Landcover | null;
 }
 
 /** Old single-region files list a core and a far grid instead of a grid list. */
@@ -194,15 +198,16 @@ export async function loadTerrain(baseUrl: string, rule: WaterRule): Promise<Ter
     fetch(baseUrl + name)
       .then((r) => (r.ok ? (r.json() as Promise<T[]>) : []))
       .catch(() => [] as T[]);
-  const [buffers, roads, trees, rails, rivers] = await Promise.all([
+  const [buffers, roads, trees, rails, rivers, landcover] = await Promise.all([
     Promise.all(meta.grids.map((g) => get(g.file).then((r) => r.arrayBuffer()))),
     get('roads.json').then((r) => r.json() as Promise<RoadData[]>),
     get('trees.json').then((r) => r.json() as Promise<TreeData[]>),
     optional<RailLine>('rails.json'),
     optional<RiverLine>('rivers.json'),
+    loadLandcover(baseUrl).catch(() => null),
   ]);
   grids = meta.grids.map((info, i) => toGrid(buffers[i], info));
   waterRule = rule;
   waterMask = buildWaterMask(grids[0], rule);
-  return { meta, grids, core: grids[0], far: grids[grids.length - 1], roads, trees, rails, rivers };
+  return { meta, grids, core: grids[0], far: grids[grids.length - 1], roads, trees, rails, rivers, landcover };
 }
