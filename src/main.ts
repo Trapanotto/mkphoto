@@ -121,6 +121,10 @@ async function start() {
         clock.hour = (from + 0.5) % 24;
         timeNote = ` · Zeit auf ${clock.label} gestellt`;
       }
+    } else if (!isDay(clock.hour)) {
+      // day jobs happen by day
+      clock.hour = 10;
+      timeNote = ` · Zeit auf ${clock.label} gestellt`;
     }
     save();
     refreshJob();
@@ -131,6 +135,17 @@ async function start() {
     save();
     refreshJob();
   };
+
+  /** Daylight hours the game keeps to unless a job needs other light. */
+  const DAY_START = 7;
+  const DAY_END = 19.5;
+  const isDay = (h: number) => h >= DAY_START && h < DAY_END;
+
+  /** Next interesting light; without a timed job, night is skipped to the morning. */
+  function skipTime() {
+    clock.skip();
+    if (!activeJob()?.hours && !isDay(clock.hour)) clock.hour = DAY_START;
+  }
 
   /** What handing in a rated photo would bring for the active job. */
   function offerFor(job: Assignment, rating: Rating): Offer {
@@ -228,7 +243,7 @@ async function start() {
         menu.close();
         break;
       case 'time':
-        clock.skip();
+        skipTime();
         menu.close();
         showToast(`Zeit: ${clock.label}`);
         break;
@@ -424,11 +439,14 @@ async function start() {
           follow.snap(drone);
         }
       }
-      if (c.skipTime) clock.skip();
+      if (c.skipTime) skipTime();
       if (c.cycleQuality) quality.cycle();
     }
 
     clock.update(dt);
+    // night only when a job asks for it: otherwise evening runs into the next morning
+    const timedJob = activeJob()?.hours;
+    if (!timedJob && !isDay(clock.hour)) clock.hour = DAY_START;
     clock.apply({ sky, sun, hemi, fog, lake: world.lake, windows: world.windows });
     wind.update(t);
     world.update(dt, wind.base);
