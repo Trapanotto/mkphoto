@@ -157,6 +157,8 @@ async function start() {
     game.activeJob = null;
     save();
     refreshJob();
+    // job done: back to flying
+    setCamera(false);
     const after = levelOf(game.reputation);
     showToast(
       `Auftrag abgeschlossen: ${offer.fee ? `+${chf(offer.fee)}` : ''}${offer.reputation ? ` +${offer.reputation} Ruf` : ''}` +
