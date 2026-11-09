@@ -89,10 +89,16 @@ function padTexture() {
   g.beginPath();
   g.arc(256, 256, 200, 0, Math.PI * 2);
   g.stroke();
-  // MK mark, same strokes as the logo (200 × 200 artwork, scaled up)
+  // landing circle in the middle, where the drone stands
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 5;
+  g.beginPath();
+  g.arc(256, 256, 58, 0, Math.PI * 2);
+  g.stroke();
+  // MK mark and name on the half facing the start camera, outside the drone's footprint
   g.save();
-  g.translate(256 - 100 * 1.25, 236 - 100 * 1.25);
-  g.scale(1.25, 1.25);
+  g.translate(256 - 100 * 0.62, 372 - 100 * 0.62);
+  g.scale(0.62, 0.62);
   g.strokeStyle = '#ffffff';
   g.lineWidth = 18;
   g.lineCap = 'round';
@@ -107,9 +113,9 @@ function padTexture() {
   g.stroke();
   g.restore();
   g.fillStyle = '#ffffff';
-  g.font = '800 46px system-ui, sans-serif';
+  g.font = '800 40px system-ui, sans-serif';
   g.textAlign = 'center';
-  g.fillText('MKPHOTO', 256, 418);
+  g.fillText('MKPHOTO', 256, 448);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -182,8 +188,9 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   const PAD_R = 2.2;
   const PAD_H = 0.4;
   const pad = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(PAD_R + 0.15, PAD_R + 0.3, PAD_H, 40), toon('#3a3f46'));
-  base.position.y = PAD_H / 2;
+  // the base reaches well into the ground so a sloping quay leaves no gap
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(PAD_R + 0.15, PAD_R + 0.3, PAD_H + 1.2, 40), toon('#3a3f46'));
+  base.position.y = (PAD_H - 1.2) / 2;
   addHull(base, 0.04);
   const top = new THREE.Mesh(new THREE.CircleGeometry(PAD_R, 48), new THREE.MeshBasicMaterial({ map: padTexture() }));
   top.rotation.x = -Math.PI / 2;
