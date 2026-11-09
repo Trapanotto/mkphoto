@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ObstacleIndex, Strip } from './obstacles';
-import { terrainAt, WATER_EPS, type RoadData } from './terrain';
+import { isWater, terrainAt, type RoadData } from './terrain';
 import { striped, toon } from './toon';
 
 /** A road or path, resampled every few metres with its height (terrain or bridge deck). */
@@ -51,7 +51,15 @@ function resample(pts: [number, number][]) {
 /** Heights along a route: terrain on land, a straight deck between the banks over water. */
 function heights(pts: [number, number][], name: string | null) {
   const ground = pts.map(([x, z]) => terrainAt(x, z));
-  const water = ground.map((h) => h <= WATER_EPS);
+  const water = pts.map(([x, z]) => isWater(x, z));
+  // only real crossings get a deck: a path brushing the shore stays on the ground
+  for (let i = 0; i < water.length; i++) {
+    if (!water[i]) continue;
+    let e = i;
+    while (e < water.length - 1 && water[e + 1]) e++;
+    if ((e - i + 1) * STEP < 12) for (let k = i; k <= e; k++) water[k] = false;
+    i = e;
+  }
   const y = ground.slice();
   if (name === 'Kapellbrücke') return { y: y.map((h, i) => (water[i] ? DECK_KAPELL : Math.max(h, DECK_KAPELL - 0.3))), bridged: water.map(() => false), hasDeck: false };
   for (let i = 0; i < pts.length; i++) {
@@ -75,7 +83,7 @@ const mat4 = (x: number, y: number, z: number, yaw: number, sx = 1, sy = 1, sz =
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(sx, sy, sz));
 
 /** lampGlow: material of the lamp heads, lit at night by the time of day. */
-export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: ObstacleIndex, lampGlow: THREE.Material): Route[] {
+export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: ObstacleIndex, lampGlow: THREE.Material, bridges = true): Route[] {
   const rails: THREE.Matrix4[] = [];
   const posts: THREE.Matrix4[] = [];
   const piers: THREE.Matrix4[] = [];
@@ -95,7 +103,12 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
     const color = cls.surface === 'asphalt' && r.kind === 'car' ? SURFACE.asphalt : pedestrianZone ? (r.type === 10 || r.type === 20 ? SURFACE.pedestrian : SURFACE.lane) : SURFACE.path;
     const pts2 = resample(r.pts);
     if (pts2.length < 2) continue;
-    const { y, bridged, hasDeck } = heights(pts2, r.name);
+    const h = heights(pts2, r.name);
+    const { y } = h;
+    // without bridges (mountain lakes) a path just follows the shore
+    const bridged = bridges ? h.bridged : h.bridged.map(() => false);
+    const hasDeck = bridges && h.hasDeck;
+    if (!bridges) for (let i = 0; i < y.length; i++) y[i] = Math.max(y[i], 0.2);
     // bigger roads sit a hair higher, so crossings don't flicker
     const lift = cls.surface === 'asphalt' ? 0.22 : cls.surface === 'lane' ? 0.18 : 0.14;
     const half = cls.width / 2;

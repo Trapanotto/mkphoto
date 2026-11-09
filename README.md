@@ -8,6 +8,7 @@ Drohnenfotografie-Spiel im Cel-Shading-Look an bekannten Orten der Schweiz. Läu
 
 - **M0 Grundgerüst:** Vite + TypeScript + three.js, automatisches Deployment auf GitHub Pages
 - **M1 Fliegen:** Flugmodell mit Assist- und Pro-Modus, Follow-Kamera, Akku (12 min, Laden auf dem Startplatz), Wind mit Böen, Flugverbot über 120 m und ausserhalb des Gebiets
+- **Region Matterhorn:** Riffelsee, Gornergrat und Matterhorn aus swisstopo-Höhendaten (vier Raster von 10 m bis 250 m), Gebäude aus swissBUILDINGS3D, Wanderwege aus swissTLM3D, alpine Farben, Alpendohlen, fünf eigene Aufträge; Region wechseln im Menü oder mit `?region=zermatt`
 - **Detail-Durchgang:** Gebäude aus swissBUILDINGS3D (2830 Gebäude mit echten Dachformen, Fenster und Nachtlicht), Strassen, Wege und Brückenplatten aus swissTLM3D mit Gehwegen, 2725 Bäume an echten Standorten, Passanten, Autos und Busse, Schwäne, Enten, Möwen, Dampfschiff und Motorboote, detaillierte Kapellbrücke und Wasserturm, gezeichnetes Wasser mit Uferschaum und Wellenlinien
 - **M5 Aufträge & Menü:** Hauptmenü mit Logo (Kameraflug über die Brücke im Hintergrund), Intro, Studio mit Auftragsliste, 6 Aufträge als JSON-Daten (`public/data/luzern/assignments.json`), Honorar in CHF und Ruf mit 5 Stufen, die neue Aufträge freischalten, Spielstand in IndexedDB
 - **M4 Foto-Bewertung:** Messpunkte an Kapellbrücke und Wasserturm, Sicht- und Verdeckungstest, Teilnoten für Motiv, Komposition (Drittel, Horizont), Licht (Tageszeit, Gegenlicht), Kundenwunsch und Technik (Wind, Drehung), Bonus für besondere Perspektiven, 0–5 Sterne mit Kundenkommentar; Testauftrag „Postkarte: Kapellbrücke mit Wasserturm“, Motiv-Markierung im Sucher
@@ -54,6 +55,8 @@ Lädt Gelände, Oberflächenmodell, Strassen, Bäume und Fernsicht von geo.admin
 
 ```bash
 node tools/import-buildings3d.mjs
+node tools/import-zermatt.mjs
+node tools/import-buildings3d.mjs zermatt
 ```
 
 Lädt swissBUILDINGS3D (DXF) und schreibt die Gebäude als komprimierte Dreiecksliste. Daten: © swisstopo.

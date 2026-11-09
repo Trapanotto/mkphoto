@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createDroneModel, type DroneModel } from './droneModel';
 import type { ObstacleIndex } from './obstacles';
-import { FLIGHT_RADIUS, HOME, HOME_YAW, MAX_ALTITUDE, heightAt } from './world';
+import { FLIGHT_CENTER, FLIGHT_RADIUS, HOME, HOME_YAW, MAX_ALTITUDE, heightAt } from './world';
 
 /** What the flight model needs to know about the world. */
 export interface FlightWorld {
@@ -161,8 +161,10 @@ export class Drone {
       this.vel.y = Math.min(0, this.vel.y);
     }
 
-    this.atBoundary = Math.hypot(p.x, p.z) > FLIGHT_RADIUS;
-    if (this.atBoundary) this.pushOut(p.x, p.z, FLIGHT_RADIUS, 0, 0, true);
+    const fx = p.x - FLIGHT_CENTER.x;
+    const fz = p.z - FLIGHT_CENTER.y;
+    this.atBoundary = Math.hypot(fx, fz) > FLIGHT_RADIUS;
+    if (this.atBoundary) this.pushOut(fx, fz, FLIGHT_RADIUS, FLIGHT_CENTER.x, FLIGHT_CENTER.y, true);
   }
 
   /** Keeps the drone outside (or, for the boundary, inside) a circle and removes velocity into it. */

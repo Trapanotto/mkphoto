@@ -1,6 +1,6 @@
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home';
+export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home' | 'region';
 
 /** Title screen and pause menu. The game keeps rendering behind it. */
 export class MainMenu {

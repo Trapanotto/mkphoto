@@ -1,0 +1,57 @@
+{
+  "region": "zermatt",
+  "origin": {
+    "e": 2625066,
+    "n": 1092474
+  },
+  "lakeLevel": 2756.6,
+  "grids": [
+    {
+      "name": "core",
+      "file": "core.bin",
+      "center": {
+        "x": 534,
+        "z": -26
+      },
+      "size": 3200,
+      "step": 10,
+      "count": 321
+    },
+    {
+      "name": "matterhorn",
+      "file": "matterhorn.bin",
+      "center": {
+        "x": -8016,
+        "z": 774
+      },
+      "size": 3000,
+      "step": 15,
+      "count": 201
+    },
+    {
+      "name": "mid",
+      "file": "mid.bin",
+      "center": {
+        "x": -4066,
+        "z": -26
+      },
+      "size": 20000,
+      "step": 50,
+      "count": 401
+    },
+    {
+      "name": "far",
+      "file": "far.bin",
+      "center": {
+        "x": -4066,
+        "z": -26
+      },
+      "size": 40000,
+      "step": 250,
+      "count": 161
+    }
+  ],
+  "heightUnit": "dm relative to baseLevel, Int16, rows north to south",
+  "attribution": "© swisstopo (swissALTI3D, DHM25, swissBUILDINGS3D, swissTLM3D)",
+  "created": "2026-11-09"
+}

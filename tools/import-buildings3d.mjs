@@ -1,13 +1,14 @@
 // Downloads swissBUILDINGS3D 2.0 (DXF) from swisstopo for the Luzern game area and writes
 // the buildings as one compressed triangle list: public/data/luzern/buildings3d.bin.gz
 //
-//   node tools/import-buildings3d.mjs
+//   node tools/import-buildings3d.mjs            (Luzern)
+//   node tools/import-buildings3d.mjs zermatt    (region from tools/regions/zermatt.json)
 //
 // Source: swissBUILDINGS3D 2.0, © swisstopo
 //   https://data.geo.admin.ch/api/stac/v0.9/collections/ch.swisstopo.swissbuildings3d_2
 //
 // Output layout (little endian):
-//   Int16 x, y, z per vertex, three vertices per triangle, 0.05 m units, game coordinates
+//   Int16 x, y, z per vertex, three vertices per triangle, in `unit` metres (0.05 m in Luzern), game coordinates
 //   followed by Uint16 building index per triangle
 // buildings3d.json holds the building types and the triangle count.
 import { createReadStream, existsSync } from 'node:fs';
@@ -16,33 +17,61 @@ import { createInterface } from 'node:readline';
 import { execFileSync } from 'node:child_process';
 import { gzipSync } from 'node:zlib';
 
-const ORIGIN = { e: 2666010, n: 1211541 };
-const LAKE_LEVEL = 433.6;
-const HALF = 800;
-const Q = 20; // 1 / 0.05 m
-/** Sheets covering the area; the newest edition of each is used. */
-const SHEETS = ['1150-41', '1150-23'];
-/** Hand-made landmarks replace these parts of the data. */
+const REGION = process.argv[2] ?? 'luzern';
+
+/** Area, origin and DXF sheets per region; the newest edition of each sheet is used. */
+const REGIONS = {
+  luzern: {
+    origin: { e: 2666010, n: 1211541 },
+    base: 433.6,
+    center: { x: 0, z: 0 },
+    half: 800,
+    sheets: ['1150-41', '1150-23'],
+    replaceLandmarks: true,
+  },
+};
+if (REGION !== 'luzern') {
+  const cfg = JSON.parse(await readFile(new URL(`./regions/${REGION}.json`, import.meta.url), 'utf8'));
+  const core = cfg.grids[0];
+  REGIONS[REGION] = {
+    origin: cfg.origin,
+    base: cfg.baseLevel,
+    center: { x: core.center.e - cfg.origin.e, z: cfg.origin.n - core.center.n },
+    half: core.size / 2,
+    sheets: cfg.buildingSheets,
+    replaceLandmarks: false,
+  };
+}
+const R = REGIONS[REGION];
+// quantisation: 5 cm where the area fits Int16, coarser for larger areas (|coordinate| × Q must stay < 32767)
+const extent = Math.max(Math.abs(R.center.x), Math.abs(R.center.z)) + R.half + 50;
+const Q = Math.min(20, Math.floor(32000 / extent));
+const ORIGIN = R.origin;
+const LAKE_LEVEL = R.base;
+const SHEETS = R.sheets;
+/** Hand-made landmarks in Luzern replace these parts of the data. */
 const BRIDGE_PATH = [[58.3, -75.4], [-12.3, 29.3], [-57.3, 62.9], [-55.4, 74.4]];
 const TOWER = [-7, 38];
 
 const CACHE = new URL('./.cache/', import.meta.url);
-const OUT = new URL('../public/data/luzern/', import.meta.url);
+const OUT = new URL(`../public/data/${REGION}/`, import.meta.url);
 const STAC = 'https://data.geo.admin.ch/api/stac/v0.9/collections/ch.swisstopo.swissbuildings3d_2/items';
 
 async function sheetUrl(sheet) {
-  const res = await (await fetch(`${STAC}?bbox=8.25,47.0,8.36,47.1&limit=100`)).json();
+  const bbox = REGION === 'luzern' ? '8.25,47.0,8.36,47.1' : '7.6,45.9,7.9,46.1';
+  const res = await (await fetch(`${STAC}?bbox=${bbox}&limit=100`)).json();
   const hrefs = res.features
     .flatMap((f) => Object.values(f.assets).map((a) => a.href))
     .filter((h) => h.endsWith(`_${sheet}_2056_5728.dxf.zip`))
     .sort();
-  if (!hrefs.length) throw new Error(`no DXF for sheet ${sheet}`);
+  if (!hrefs.length) return null;
   return hrefs.at(-1);
 }
 
 async function dxfFor(sheet) {
   await mkdir(CACHE, { recursive: true });
   const url = await sheetUrl(sheet);
+  if (!url) return null;
   const zip = new URL(url.split('/').pop(), CACHE);
   if (!existsSync(zip)) {
     console.log(`  downloading ${url.split('/').pop()}`);
@@ -114,15 +143,20 @@ let skipped = 0;
 
 for (const sheet of SHEETS) {
   const file = await dxfFor(sheet);
+  if (!file) {
+    console.log(`  no DXF for sheet ${sheet}, skipped`);
+    continue;
+  }
   console.log(`Reading ${file.split('/').pop()}`);
   await readPolyfaces(file, (mesh) => {
     if (!mesh.verts.length || mesh.layer === 'Unterirdisches Gebaeude') return;
     const local = mesh.verts.map(([e, n, h]) => [e - ORIGIN.e, h - LAKE_LEVEL, ORIGIN.n - n]);
     const cx = local.reduce((s, p) => s + p[0], 0) / local.length;
     const cz = local.reduce((s, p) => s + p[2], 0) / local.length;
-    if (Math.abs(cx) > HALF - 5 || Math.abs(cz) > HALF - 5) return;
-    if (local.some(([x, , z]) => Math.abs(x) > HALF || Math.abs(z) > HALF)) return;
-    if ((mesh.layer === 'Bruecke gedeckt' && distToPath(cx, cz) < 20) || Math.hypot(cx - TOWER[0], cz - TOWER[1]) < 10) {
+    const HALF = R.half;
+    if (Math.abs(cx - R.center.x) > HALF - 5 || Math.abs(cz - R.center.z) > HALF - 5) return;
+    if (local.some(([x, , z]) => Math.abs(x - R.center.x) > HALF || Math.abs(z - R.center.z) > HALF)) return;
+    if (R.replaceLandmarks && ((mesh.layer === 'Bruecke gedeckt' && distToPath(cx, cz) < 20) || Math.hypot(cx - TOWER[0], cz - TOWER[1]) < 10)) {
       skipped++;
       return;
     }

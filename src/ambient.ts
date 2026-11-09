@@ -3,7 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ObstacleIndex, Tower } from './obstacles';
 import { addHull } from './outline';
 import { along, type Route } from './roads';
-import { heightAt, terrainAt, WATER_EPS, type TreeData } from './terrain';
+import type { Region } from './regions';
+import { heightAt, isWater as waterAt, type TreeData } from './terrain';
 import { toon } from './toon';
 
 /** Life in the city: trees, people, traffic, birds and boats. */
@@ -44,7 +45,7 @@ const vertexColored = () => {
   return m;
 };
 
-const isWater = (x: number, z: number) => Math.abs(x) < 790 && Math.abs(z) < 790 && terrainAt(x, z) <= WATER_EPS;
+const isWater = (x: number, z: number) => waterAt(x, z);
 
 const M = new THREE.Matrix4();
 const Q = new THREE.Quaternion();
@@ -102,7 +103,7 @@ function limb(top: number, bottom: number, length: number, foot?: string) {
   return mergeGeometries(parts);
 }
 
-function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => number) {
+function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => number, nearRadius = 500) {
   // body parts, all tinted per person with instance colours
   const torsoGeo = mergeGeometries([
     colored(new THREE.CylinderGeometry(0.19, 0.16, 0.56, 7), '#ffffff', scaled(0, 1.24, 0, 1.15, 1, 0.75)),
@@ -152,9 +153,10 @@ function people(scene: THREE.Scene, routes: Route[], count: number, rand: () => 
   const packColors = ['#2e86c1', '#c0392b', '#2d3436', '#27ae60', '#f39c12'];
   const dogColors = ['#c8a36a', '#3a2a1a', '#f0e6d8', '#8a5a3a'];
 
-  const near = routes.filter((r) => r.length > 8 && r.pts.some((p) => Math.hypot(p.x, p.z) < 500));
+  const near = routes.filter((r) => r.length > 8 && r.pts.some((p) => Math.hypot(p.x, p.z) < nearRadius));
   const bridge = routes.filter((r) => r.name === 'Kapellbrücke');
   const pool = near.flatMap((r) => Array(Math.ceil(r.length / 25)).fill(r) as Route[]);
+  if (!pool.length) count = 0;
   const walkers: Walker[] = [];
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   for (let i = 0; i < count; i++) {
@@ -371,14 +373,16 @@ function waterBirds(scene: THREE.Scene, rand: () => number, swans: number, ducks
 
 // --- Gulls ------------------------------------------------------------------------------------
 
-function gulls(scene: THREE.Scene, rand: () => number, count: number) {
+/** Seagulls over the lake, or alpine choughs (black, yellow beak) in the mountains. */
+function gulls(scene: THREE.Scene, rand: () => number, count: number, kind: 'gulls' | 'choughs', centres: [number, number][]) {
+  const chough = kind === 'choughs';
   const bodyGeo = mergeGeometries([
-    colored(new THREE.SphereGeometry(0.16, 8, 6), '#ffffff', scaled(0, 0, 0, 0.8, 0.8, 2.2)),
+    colored(new THREE.SphereGeometry(0.16, 8, 6), chough ? '#1c1d20' : '#ffffff', scaled(0, 0, 0, 0.8, 0.8, 2.2)),
     colored(new THREE.ConeGeometry(0.04, 0.12, 5), '#e6b422', at(0, 0, 0.4, Math.PI / 2, 0, 0)),
   ]);
-  const wingGeo = colored(new THREE.BoxGeometry(0.75, 0.03, 0.26), '#e8ecef');
+  const wingGeo = colored(new THREE.BoxGeometry(0.75, 0.03, 0.26), chough ? '#222428' : '#e8ecef');
   wingGeo.translate(0.38, 0, 0);
-  const tip = colored(new THREE.BoxGeometry(0.2, 0.031, 0.24), '#2f3337');
+  const tip = colored(new THREE.BoxGeometry(0.2, 0.031, 0.24), chough ? '#111214' : '#2f3337');
   tip.translate(0.68, 0, 0);
   const wing = mergeGeometries([wingGeo, tip]);
   const bodies = new THREE.InstancedMesh(bodyGeo, vertexColored(), count);
@@ -386,15 +390,11 @@ function gulls(scene: THREE.Scene, rand: () => number, count: number) {
   const right = new THREE.InstancedMesh(wing, vertexColored(), count);
   bodies.frustumCulled = left.frustumCulled = right.frustumCulled = false;
   scene.add(bodies, left, right);
-  const centres: [number, number][] = [
-    [0, 10],
-    [-120, -40],
-    [250, 60],
-  ];
   const birds = Array.from({ length: count }, (_, i) => ({
     c: centres[i % centres.length],
-    r: 30 + rand() * 60,
-    h: 14 + rand() * 30,
+    ground: heightAt(centres[i % centres.length][0], centres[i % centres.length][1]),
+    r: (30 + rand() * 60) * (chough ? 2.5 : 1),
+    h: chough ? 45 + rand() * 60 : 14 + rand() * 30,
     w: (0.12 + rand() * 0.12) * (rand() < 0.5 ? -1 : 1),
     a: rand() * Math.PI * 2,
     phase: rand() * 10,
@@ -405,7 +405,7 @@ function gulls(scene: THREE.Scene, rand: () => number, count: number) {
       b.a += b.w * dt;
       const x = b.c[0] + Math.cos(b.a) * b.r;
       const z = b.c[1] + Math.sin(b.a) * b.r;
-      const y = b.h + Math.sin(time * 0.5 + b.phase) * 3;
+      const y = Math.max(b.ground, heightAt(x, z)) + b.h + Math.sin(time * 0.5 + b.phase) * 3;
       // heading along the circle, banked into the turn
       const heading = Math.atan2(-Math.sin(b.a) * Math.sign(b.w), Math.cos(b.a) * Math.sign(b.w));
       Q.setFromEuler(E.set(0, heading, -0.35 * Math.sign(b.w), 'YXZ'));
@@ -525,16 +525,24 @@ function boats(scene: THREE.Scene, rand: () => number, small: number) {
 }
 
 /** density: 1 on high graphics, less on weaker devices. */
-export function createAmbient(scene: THREE.Scene, data: { trees: TreeData[] }, routes: Route[], obstacles: ObstacleIndex, density: number): Ambient {
+export function createAmbient(
+  scene: THREE.Scene,
+  data: { trees: TreeData[] },
+  routes: Route[],
+  obstacles: ObstacleIndex,
+  density: number,
+  region: Region,
+): Ambient {
   const rand = random(99);
-  trees(scene, data.trees, obstacles, rand);
-  const updates = [
-    people(scene, routes, Math.round(380 * density), rand),
-    traffic(scene, routes, Math.round(60 * density), rand),
-    waterBirds(scene, rand, 12, Math.round(24 * density)),
-    gulls(scene, rand, Math.round(36 * density)),
-    boats(scene, rand, Math.round(6 * density)),
+  const a = region.ambient;
+  if (data.trees.length) trees(scene, data.trees, obstacles, rand);
+  const updates: ((dt: number, time: number) => void)[] = [
+    people(scene, routes, Math.round(a.people * density), rand, region.id === 'luzern' ? 500 : 1800),
+    gulls(scene, rand, Math.round(a.birdCount * density), a.birds, a.birdCentres),
   ];
+  if (a.cars) updates.push(traffic(scene, routes, Math.round(a.cars * density), rand));
+  if (a.swans || a.ducks) updates.push(waterBirds(scene, rand, a.swans, Math.round(a.ducks * density)));
+  if (a.boats) updates.push(boats(scene, rand, Math.round(6 * density)));
   return {
     update(dt, time) {
       for (const u of updates) u(dt, time);

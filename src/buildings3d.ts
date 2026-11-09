@@ -40,16 +40,21 @@ export class RoofMap {
   private readonly half: number;
   private readonly cells: Uint16Array;
 
-  constructor(halfExtent: number) {
+  /** Covers a square of 2 × halfExtent metres around (cx, cz). */
+  constructor(
+    halfExtent: number,
+    private readonly cx = 0,
+    private readonly cz = 0,
+  ) {
     this.half = halfExtent;
-    this.size = halfExtent * 2;
+    this.size = Math.round(halfExtent * 2);
     this.cells = new Uint16Array(this.size * this.size);
   }
 
   /** Top of the building at a point, or -Infinity where there is none. */
   top(x: number, z: number) {
-    const i = Math.floor(x + this.half);
-    const j = Math.floor(z + this.half);
+    const i = Math.floor(x - this.cx + this.half);
+    const j = Math.floor(z - this.cz + this.half);
     if (i < 0 || j < 0 || i >= this.size || j >= this.size) return -Infinity;
     const v = this.cells[j * this.size + i];
     return v === 0 ? -Infinity : v / 10 - 50;
@@ -57,6 +62,9 @@ export class RoofMap {
 
   /** Adds a triangle's upward surface: each cell centre inside it keeps the highest height. */
   addTriangle(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) {
+    // work in the map's own frame
+    ax -= this.cx; bx -= this.cx; cx -= this.cx;
+    az -= this.cz; bz -= this.cz; cz -= this.cz;
     const h = this.half;
     const i0 = Math.max(0, Math.floor(Math.min(ax, bx, cx) + h));
     const i1 = Math.min(this.size - 1, Math.floor(Math.max(ax, bx, cx) + h));

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { terrainAt, WATER_EPS } from './terrain';
+import { isWater, type Grid } from './terrain';
 
 /**
  * Cel-shaded water: saturated blue that turns turquoise near the shore, hard white foam
@@ -15,15 +15,15 @@ export interface Water {
 const RES = 2.5;
 
 /** Distance from every water cell to the nearest shore or structure, in metres (0..60). */
-function shoreDistance(half: number, solids: ((x: number, z: number) => boolean)[]) {
+function shoreDistance(half: number, cx: number, cz: number, solids: ((x: number, z: number) => boolean)[]) {
   const n = Math.round((half * 2) / RES) + 1;
   const big = 1e6;
   const d = new Float32Array(n * n);
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) {
-      const x = -half + i * RES;
-      const z = -half + j * RES;
-      const land = terrainAt(x, z) > WATER_EPS || solids.some((f) => f(x, z));
+      const x = cx - half + i * RES;
+      const z = cz - half + j * RES;
+      const land = !isWater(x, z) || solids.some((f) => f(x, z));
       d[j * n + i] = land ? 0 : big;
     }
   // two-pass chamfer distance transform
@@ -61,7 +61,12 @@ function shoreDistance(half: number, solids: ((x: number, z: number) => boolean)
   return tex;
 }
 
-export function createWater(size: number, coreHalf: number, solids: ((x: number, z: number) => boolean)[]): Water {
+/**
+ * size: edge of the water plane. core: the detailed grid the shore distances are computed on.
+ * lakeOnly: draw water only over lake cells (a mountain lake high above a dry valley).
+ */
+export function createWater(size: number, core: Grid, solids: ((x: number, z: number) => boolean)[], lakeOnly = false): Water {
+  const coreHalf = core.size / 2;
   const deep = new THREE.Color('#2a7fd4');
   const shallow = new THREE.Color();
   const foam = new THREE.Color();
@@ -74,12 +79,14 @@ export function createWater(size: number, coreHalf: number, solids: ((x: number,
       uWind: { value: new THREE.Vector2(1, 0) },
       uDist: { value: null },
       uHalf: { value: coreHalf },
+      uCenter: { value: new THREE.Vector2(core.center.x, core.center.z) },
+      uLakeOnly: { value: lakeOnly ? 1 : 0 },
       uDeep: { value: deep },
       uShallow: { value: shallow },
       uFoam: { value: foam },
     },
   ]);
-  uniforms.uDist.value = shoreDistance(coreHalf, solids);
+  uniforms.uDist.value = shoreDistance(coreHalf, core.center.x, core.center.z, solids);
   // keep our colour objects (merge clones them)
   uniforms.uDeep.value = deep;
   uniforms.uShallow.value = shallow;
@@ -107,6 +114,8 @@ export function createWater(size: number, coreHalf: number, solids: ((x: number,
       uniform vec2 uWind;
       uniform sampler2D uDist;
       uniform float uHalf;
+      uniform vec2 uCenter;
+      uniform float uLakeOnly;
       uniform vec3 uDeep;
       uniform vec3 uShallow;
       uniform vec3 uFoam;
@@ -159,9 +168,11 @@ export function createWater(size: number, coreHalf: number, solids: ((x: number,
       }
 
       void main() {
-        vec2 uv = (vWorld + uHalf) / (2.0 * uHalf);
+        vec2 uv = (vWorld - uCenter + uHalf) / (2.0 * uHalf);
         bool inside = all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)));
         float dist = inside ? texture2D(uDist, uv).r * 60.0 : 60.0;
+        // a mountain lake: no water outside the lake itself
+        if (uLakeOnly > 0.5 && (!inside || dist < 0.01)) discard;
         float fade = 1.0 - smoothstep(180.0, 650.0, vViewDist);
         vec2 drift = uWind * uTime * 0.6;
 
@@ -206,6 +217,7 @@ export function createWater(size: number, coreHalf: number, solids: ((x: number,
 
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), material);
   mesh.rotation.x = -Math.PI / 2;
+  if (lakeOnly) mesh.position.set(core.center.x, 0, core.center.z);
 
   return {
     mesh,

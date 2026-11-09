@@ -16,6 +16,7 @@ import { LEVELS, Quality } from './quality';
 import { analyseSubject, ratePhoto, requirementChecks, type Rating, type SubjectView } from './rating';
 import { BriefPanel, RatingCard, type Offer } from './ratingCard';
 import { deleteGame, loadGame, newGame, storeGame, type SaveGame } from './save';
+import { pickRegion, REGIONS } from './regions';
 import { Sky } from './sky';
 import { Studio } from './studio';
 import { loadTerrain } from './terrain';
@@ -54,9 +55,17 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 const loading = $('loading');
 
 async function start() {
-  const base = `${import.meta.env.BASE_URL}data/luzern/`;
-  const [data, houses, jobs, saved] = await Promise.all([loadTerrain(base), loadBuildings3d(base), loadAssignments(base), loadGame()]);
-  $('credits').textContent = 'Geodaten © swisstopo (swissALTI3D, swissSURFACE3D, swissBUILDINGS3D, swissTLM3D)';
+  const region = pickRegion();
+  const base = `${import.meta.env.BASE_URL}data/${region.id}/`;
+  $('loading-text').textContent = `${region.name} wird geladen …`;
+  const [data, houses, jobs, saved] = await Promise.all([
+    loadTerrain(base, region.water),
+    loadBuildings3d(base),
+    loadAssignments(base),
+    loadGame(),
+  ]);
+  $('credits').textContent =
+    region.id === 'luzern' ? 'Geodaten © swisstopo (swissALTI3D, swissSURFACE3D, swissBUILDINGS3D, swissTLM3D)' : `Geodaten ${data.meta.attribution}`;
 
   let game: SaveGame = saved ?? newGame();
   let hasSave = !!saved;
@@ -64,7 +73,7 @@ async function start() {
 
   // fewer people, cars and birds on weaker devices
   const density = quality.level === 'high' ? 1 : quality.level === 'medium' ? 0.65 : 0.35;
-  const world = createWorld(scene, data, houses, density);
+  const world = createWorld(scene, data, houses, region, density);
   const drone = new Drone();
   drone.mode = game.pro ? 'pro' : 'assist';
   scene.add(drone.group);
@@ -181,6 +190,7 @@ async function start() {
 
   function syncMenuLabels() {
     menu.setLabels(quality.label, drone.mode === 'pro' ? 'Pro' : 'Assist');
+    $('menu-region').textContent = `Region: ${region.id === 'luzern' ? REGIONS.zermatt.name : REGIONS.luzern.name}`;
   }
 
   function beginPlay() {
@@ -226,6 +236,13 @@ async function start() {
         save();
         syncMenuLabels();
         break;
+      case 'region': {
+        // switch region: save, then reload with the other region's data
+        save();
+        const next = region.id === 'luzern' ? REGIONS.zermatt : REGIONS.luzern;
+        location.search = `?region=${next.id}`;
+        break;
+      }
       case 'home':
         drone.reset();
         follow.snap(drone);

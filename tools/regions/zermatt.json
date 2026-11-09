@@ -1,0 +1,53 @@
+{
+  "id": "zermatt",
+  "name": "Matterhorn",
+  "origin": {
+    "e": 2625066,
+    "n": 1092474
+  },
+  "baseLevel": 2756.6,
+  "grids": [
+    {
+      "name": "core",
+      "center": {
+        "e": 2625600,
+        "n": 1092500
+      },
+      "size": 3200,
+      "step": 10
+    },
+    {
+      "name": "matterhorn",
+      "center": {
+        "e": 2617050,
+        "n": 1091700
+      },
+      "size": 3000,
+      "step": 15
+    },
+    {
+      "name": "mid",
+      "center": {
+        "e": 2621000,
+        "n": 1092500
+      },
+      "size": 20000,
+      "step": 50
+    },
+    {
+      "name": "far",
+      "center": {
+        "e": 2621000,
+        "n": 1092500
+      },
+      "size": 40000,
+      "step": 250
+    }
+  ],
+  "buildingSheets": [
+    "1348-13",
+    "1348-14",
+    "1348-31",
+    "1348-32"
+  ]
+}
