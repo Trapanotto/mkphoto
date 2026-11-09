@@ -1,0 +1,43 @@
+[
+  {
+    "id": "landwasser-klassiker",
+    "client": "Bahnreisen Albula",
+    "contact": "Herr Caflisch",
+    "title": "Katalog: Landwasserviadukt",
+    "brief": "Der ganze Viadukt mit seinen Bögen, quer, das Tunnelportal in der Felswand gut sichtbar.",
+    "subjects": ["landwasserviadukt"],
+    "orientation": "landscape",
+    "size": { "min": 0.08, "max": 0.8 },
+    "horizon": true,
+    "reward": 500,
+    "reputation": 22,
+    "level": 1
+  },
+  {
+    "id": "landwasser-tele",
+    "client": "Eisenbahn-Revue Graubünden",
+    "contact": "Frau Pfister",
+    "title": "Doppelseite: Bögen mit Tele",
+    "brief": "Die Bögen und Pfeiler formatfüllend, mit Tele aus der Distanz.",
+    "subjects": ["landwasserviadukt"],
+    "size": { "min": 0.2, "max": 0.95 },
+    "focalMin": { "mm": 55, "label": "Tele ab 55 mm" },
+    "reward": 460,
+    "reputation": 20,
+    "level": 1
+  },
+  {
+    "id": "landwasser-von-unten",
+    "client": "Naturpark Ela",
+    "contact": "Herr Bergamin",
+    "title": "Plakat: Viadukt vom Fluss aus",
+    "brief": "Aus der Sicht des Wanderers am Fluss: tief unten, der Viadukt hoch oben, im Nachmittagslicht.",
+    "subjects": ["landwasserviadukt"],
+    "size": { "min": 0.06, "max": 0.9 },
+    "altitudeMax": { "m": 10, "label": "Höchstens 10 m über Grund" },
+    "hours": { "from": 14, "to": 17.5, "label": "Nachmittagslicht (14 bis 17:30 Uhr)" },
+    "reward": 520,
+    "reputation": 24,
+    "level": 2
+  }
+]

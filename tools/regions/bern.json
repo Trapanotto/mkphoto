@@ -1,0 +1,14 @@
+{
+  "id": "bern",
+  "name": "Berner Münster",
+  "origin": { "e": 2600987, "n": 1199573 },
+  "baseLevel": 497.0,
+  "grids": [
+    { "name": "core", "center": { "e": 2601200, "n": 1199600 }, "size": 2000, "step": 5 },
+    { "name": "mid", "center": { "e": 2601200, "n": 1199600 }, "size": 12000, "step": 40 },
+    { "name": "far", "center": { "e": 2605000, "n": 1192000 }, "size": 60000, "step": 300 }
+  ],
+  "trees": true,
+  "buildingSheets": ["1166-24", "1166-42", "1167-13", "1167-31"],
+  "stacBbox": "7.42,46.93,7.48,46.97"
+}

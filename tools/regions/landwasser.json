@@ -1,0 +1,14 @@
+{
+  "id": "landwasser",
+  "name": "Landwasserviadukt",
+  "origin": { "e": 2771150, "n": 1172390 },
+  "baseLevel": 985.0,
+  "grids": [
+    { "name": "core", "center": { "e": 2771300, "n": 1172200 }, "size": 2000, "step": 5 },
+    { "name": "mid", "center": { "e": 2771300, "n": 1172200 }, "size": 12000, "step": 40 },
+    { "name": "far", "center": { "e": 2771300, "n": 1172200 }, "size": 40000, "step": 250 }
+  ],
+  "trees": true,
+  "buildingSheets": ["1216-41", "1216-42", "1216-43", "1216-44"],
+  "stacBbox": "9.6,46.63,9.76,46.72"
+}

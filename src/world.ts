@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createAmbient } from './ambient';
 import { createAlpineLandmarks } from './alpine';
+import { buildingLandmark, lineLandmark, roadLandmark } from './dataLandmarks';
+import { createRails, createTrain } from './rails';
+import { createRivers, riverMask } from './rivers';
 import { createLandmarks, type Landmark } from './landmarks';
 import type { Region } from './regions';
 import { buildings3dMesh, RoofMap, type Buildings3d } from './buildings3d';
@@ -122,11 +125,12 @@ function terrainMesh(
 }
 
 /** Colours for a lake town: paved shores, meadows, forest, rock and snow further out. */
-function cityColors(c: THREE.Color, base: number) {
+/** quays: a lake town paves its low shore; river towns keep their valley floor green. */
+function cityColors(c: THREE.Color, base: number, quays: boolean) {
   return (detailed: boolean) =>
     (h: number, steep: number, x: number, z: number) => {
       if (detailed) {
-        if (h < 9 && steep < 0.25) return c.copy(PAVED);
+        if (quays && h < 9 && steep < 0.25) return c.copy(PAVED);
         if (steep > 0.35) return c.copy(FOREST);
         return c.copy(Math.sin(x * 0.07) * Math.sin(z * 0.05) > 0.3 ? MEADOW : GRASS);
       }
@@ -228,7 +232,7 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
 
   // --- Terrain: every grid, the coarser ones sinking under the finer ---------------
   const c = new THREE.Color();
-  const palette = region.style === 'alpine' ? alpineColors(c, base) : cityColors(c, base);
+  const palette = region.style === 'alpine' ? alpineColors(c, base) : cityColors(c, base, region.water.mode === 'below');
   data.grids.forEach((grid, i) => {
     scene.add(terrainMesh(grid, palette(i === 0), data.grids.slice(0, i)));
   });
@@ -253,9 +257,24 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
   scene.add(buildings3dMesh(houses, roofMap));
   obstacles.roofs = roofMap;
   const windows = new THREE.MeshBasicMaterial({ color: '#3a2a22' });
-  const routes = createRoads(scene, data.roads, obstacles, windows, region.id === 'luzern');
-  const landmarks =
-    region.id === 'luzern' ? createLandmarks(scene, obstacles, windows) : createAlpineLandmarks(data, houses);
+  const routes = createRoads(scene, data.roads, obstacles, windows, region.id === 'luzern', riverMask(data.rivers));
+  // railways (viaducts included), rivers and a train where the region has them
+  const rail = createRails(scene, data.rails, obstacles);
+  const updateRivers = createRivers(scene, data.rivers);
+  const updateTrain = region.ambient.train ? createTrain(scene, rail.tracks, region.ambient.train) : () => {};
+
+  let landmarks: Landmark[];
+  if (region.id === 'luzern') landmarks = createLandmarks(scene, obstacles, windows);
+  else if (region.id === 'zermatt') landmarks = createAlpineLandmarks(data, houses);
+  else if (region.id === 'chillon') landmarks = [buildingLandmark(houses, 0, 0, 75, 'chillon', 'Schloss Chillon')].filter((l): l is Landmark => !!l);
+  else if (region.id === 'bern') landmarks = [buildingLandmark(houses, 0, 0, 50, 'muenster', 'Berner Münster', 30)].filter((l): l is Landmark => !!l);
+  else if (region.id === 'lenzburg') landmarks = [buildingLandmark(houses, 0, 0, 70, 'lenzburg', 'Schloss Lenzburg')].filter((l): l is Landmark => !!l);
+  else if (region.id === 'aarau') landmarks = [roadLandmark(data.roads, 0, 0, 'kettenbruecke', 'Kettenbrücke')].filter((l): l is Landmark => !!l);
+  else {
+    // the longest railway bridge is the Landwasserviadukt
+    const deck = rail.bridges.slice().sort((a, b) => b.length - a.length)[0] ?? [];
+    landmarks = [lineLandmark(deck, 60, 'landwasserviadukt', 'Landwasserviadukt')].filter((l): l is Landmark => !!l);
+  }
   const ambient = createAmbient(scene, data, routes, obstacles, density, region);
   let clock = 0;
 
@@ -367,6 +386,8 @@ export function createWorld(scene: THREE.Scene, data: TerrainData, houses: Build
     update(dt, wind) {
       clock += dt;
       ambient.update(dt, clock);
+      updateRivers(clock);
+      updateTrain(dt);
       water.update(clock, wind, daylight());
       // clouds stay bright by day and go dark at night
       cloudMat.emissive.setRGB(0.32, 0.34, 0.38).multiplyScalar(daylight());

@@ -1634,3 +1634,7 @@ body .cam-hint {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   cursor: pointer;
 }
+
+#menu-regions button.current {
+  outline: 3px solid #ffc531;
+}

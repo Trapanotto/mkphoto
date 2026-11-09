@@ -16,10 +16,10 @@ import { LEVELS, Quality } from './quality';
 import { analyseSubject, ratePhoto, requirementChecks, type Rating, type SubjectView } from './rating';
 import { BriefPanel, RatingCard, type Offer } from './ratingCard';
 import { deleteGame, loadGame, newGame, storeGame, type SaveGame } from './save';
-import { pickRegion, REGIONS } from './regions';
+import { pickRegion } from './regions';
 import { Sky } from './sky';
 import { Studio } from './studio';
-import { loadTerrain } from './terrain';
+import { isWater, loadTerrain, terrainAt } from './terrain';
 import { TimeOfDay } from './timeOfDay';
 import { Wind } from './wind';
 import { createWorld, heightAt } from './world';
@@ -190,7 +190,8 @@ async function start() {
 
   function syncMenuLabels() {
     menu.setLabels(quality.label, drone.mode === 'pro' ? 'Pro' : 'Assist');
-    $('menu-region').textContent = `Region: ${region.id === 'luzern' ? REGIONS.zermatt.name : REGIONS.luzern.name}`;
+    $('menu-region').textContent = `Region: ${region.name}`;
+    menu.setRegion(region.id);
   }
 
   function beginPlay() {
@@ -202,6 +203,17 @@ async function start() {
 
 
   menu.onAction = (action) => {
+    if (action.startsWith('region:')) {
+      // switch region: save, then reload with that region's data
+      const id = action.slice(7);
+      if (id === region.id) {
+        menu.close();
+        return;
+      }
+      save();
+      location.search = `?region=${id}`;
+      return;
+    }
     switch (action) {
       case 'play':
         beginPlay();
@@ -236,13 +248,6 @@ async function start() {
         save();
         syncMenuLabels();
         break;
-      case 'region': {
-        // switch region: save, then reload with the other region's data
-        save();
-        const next = region.id === 'luzern' ? REGIONS.zermatt : REGIONS.luzern;
-        location.search = `?region=${next.id}`;
-        break;
-      }
       case 'home':
         drone.reset();
         follow.snap(drone);
@@ -332,7 +337,7 @@ async function start() {
 
   // handle for poking at the game from the browser console during development
   if (import.meta.env.DEV) {
-    Object.assign(window, { mk: { drone, camera, scene, world, photo, follow, clock, studio, menu, outlines, renderer, get game() { return game; } } });
+    Object.assign(window, { mk: { drone, camera, scene, world, photo, follow, clock, studio, menu, outlines, renderer, terrain: { terrainAt, isWater, heightAt }, get game() { return game; } } });
   }
 
   // --- Resize & quality -------------------------------------------------------------
@@ -564,5 +569,5 @@ async function start() {
 
 start().catch((err) => {
   console.error(err);
-  $('loading-text').textContent = 'Luzern konnte nicht geladen werden. Bitte Seite neu laden.';
+  $('loading-text').textContent = `${pickRegion().name} konnte nicht geladen werden. Bitte Seite neu laden.`;
 });

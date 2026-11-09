@@ -1,0 +1,46 @@
+{
+  "region": "landwasser",
+  "origin": {
+    "e": 2771150,
+    "n": 1172390
+  },
+  "lakeLevel": 985,
+  "grids": [
+    {
+      "name": "core",
+      "file": "core.bin",
+      "center": {
+        "x": 150,
+        "z": 190
+      },
+      "size": 2000,
+      "step": 5,
+      "count": 401
+    },
+    {
+      "name": "mid",
+      "file": "mid.bin",
+      "center": {
+        "x": 150,
+        "z": 190
+      },
+      "size": 12000,
+      "step": 40,
+      "count": 301
+    },
+    {
+      "name": "far",
+      "file": "far.bin",
+      "center": {
+        "x": 150,
+        "z": 190
+      },
+      "size": 40000,
+      "step": 250,
+      "count": 161
+    }
+  ],
+  "heightUnit": "dm relative to baseLevel, Int16, rows north to south",
+  "attribution": "© swisstopo (swissALTI3D, swissSURFACE3D, swissBUILDINGS3D, swissTLM3D)",
+  "created": "2026-11-09"
+}

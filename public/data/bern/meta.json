@@ -1,0 +1,46 @@
+{
+  "region": "bern",
+  "origin": {
+    "e": 2600987,
+    "n": 1199573
+  },
+  "lakeLevel": 497,
+  "grids": [
+    {
+      "name": "core",
+      "file": "core.bin",
+      "center": {
+        "x": 213,
+        "z": -27
+      },
+      "size": 2000,
+      "step": 5,
+      "count": 401
+    },
+    {
+      "name": "mid",
+      "file": "mid.bin",
+      "center": {
+        "x": 213,
+        "z": -27
+      },
+      "size": 12000,
+      "step": 40,
+      "count": 301
+    },
+    {
+      "name": "far",
+      "file": "far.bin",
+      "center": {
+        "x": 4013,
+        "z": 7573
+      },
+      "size": 60000,
+      "step": 300,
+      "count": 201
+    }
+  ],
+  "heightUnit": "dm relative to baseLevel, Int16, rows north to south",
+  "attribution": "© swisstopo (swissALTI3D, swissSURFACE3D, swissBUILDINGS3D, swissTLM3D)",
+  "created": "2026-11-09"
+}

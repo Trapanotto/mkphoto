@@ -1,0 +1,44 @@
+[
+  {
+    "id": "chillon-postkarte",
+    "client": "Éditions du Léman",
+    "contact": "Madame Rochat",
+    "title": "Carte postale: Château de Chillon",
+    "brief": "Das Schloss auf seinem Felsen im See, quer, mit viel Wasser drumherum. Gerne tief über dem See.",
+    "subjects": ["chillon"],
+    "orientation": "landscape",
+    "size": { "min": 0.06, "max": 0.7 },
+    "horizon": true,
+    "altitudeMax": { "m": 20, "label": "Höchstens 20 m über dem See" },
+    "reward": 460,
+    "reputation": 20,
+    "level": 1
+  },
+  {
+    "id": "chillon-von-oben",
+    "client": "Fondation du Château",
+    "contact": "Monsieur Favre",
+    "title": "Plan: Schloss Chillon von oben",
+    "brief": "Für den neuen Rundgang-Plan: die ganze Anlage senkrecht von oben.",
+    "subjects": ["chillon"],
+    "size": { "min": 0.12, "max": 0.9 },
+    "gimbalMax": { "deg": -70, "label": "Kamera fast senkrecht nach unten" },
+    "reward": 420,
+    "reputation": 18,
+    "level": 1
+  },
+  {
+    "id": "chillon-abendlicht",
+    "client": "Montreux Riviera Magazin",
+    "contact": "Frau Chappuis",
+    "title": "Titelbild: Chillon im Abendlicht",
+    "brief": "Das Schloss im warmen Abendlicht, im Hochformat für unser Cover.",
+    "subjects": ["chillon"],
+    "orientation": "portrait",
+    "size": { "min": 0.06, "max": 0.75 },
+    "hours": { "from": 17, "to": 20.5, "label": "Abendlicht (17 bis 20:30 Uhr)" },
+    "reward": 520,
+    "reputation": 24,
+    "level": 2
+  }
+]

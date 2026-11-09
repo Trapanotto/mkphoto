@@ -1,0 +1,46 @@
+{
+  "region": "chillon",
+  "origin": {
+    "e": 2560696,
+    "n": 1140483
+  },
+  "lakeLevel": 372,
+  "grids": [
+    {
+      "name": "core",
+      "file": "core.bin",
+      "center": {
+        "x": 104,
+        "z": -117
+      },
+      "size": 2000,
+      "step": 5,
+      "count": 401
+    },
+    {
+      "name": "mid",
+      "file": "mid.bin",
+      "center": {
+        "x": 804,
+        "z": -517
+      },
+      "size": 12000,
+      "step": 40,
+      "count": 301
+    },
+    {
+      "name": "far",
+      "file": "far.bin",
+      "center": {
+        "x": -2696,
+        "z": 8483
+      },
+      "size": 60000,
+      "step": 300,
+      "count": 201
+    }
+  ],
+  "heightUnit": "dm relative to baseLevel, Int16, rows north to south",
+  "attribution": "© swisstopo (swissALTI3D, swissSURFACE3D, swissBUILDINGS3D, swissTLM3D)",
+  "created": "2026-11-09"
+}

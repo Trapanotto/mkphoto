@@ -39,6 +39,7 @@ if (REGION !== 'luzern') {
     center: { x: core.center.e - cfg.origin.e, z: cfg.origin.n - core.center.n },
     half: core.size / 2,
     sheets: cfg.buildingSheets,
+    stacBbox: cfg.stacBbox,
     replaceLandmarks: false,
   };
 }
@@ -58,7 +59,7 @@ const OUT = new URL(`../public/data/${REGION}/`, import.meta.url);
 const STAC = 'https://data.geo.admin.ch/api/stac/v0.9/collections/ch.swisstopo.swissbuildings3d_2/items';
 
 async function sheetUrl(sheet) {
-  const bbox = REGION === 'luzern' ? '8.25,47.0,8.36,47.1' : '7.6,45.9,7.9,46.1';
+  const bbox = REGION === 'luzern' ? '8.25,47.0,8.36,47.1' : R.stacBbox ?? '7.6,45.9,7.9,46.1';
   const res = await (await fetch(`${STAC}?bbox=${bbox}&limit=100`)).json();
   const hrefs = res.features
     .flatMap((f) => Object.values(f.assets).map((a) => a.href))

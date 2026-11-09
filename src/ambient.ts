@@ -462,20 +462,23 @@ function motorboat(color: string) {
   return mesh;
 }
 
-/** An ellipse on the lake that stays on water, or null. */
+/** An ellipse on the lake that stays on water, or null: tries places around the map, biggest first. */
 function lakeLoop(): THREE.Vector3[] | null {
-  const candidates: [number, number, number, number][] = [
-    [430, 60, 250, 110],
-    [400, 40, 200, 90],
-    [350, 80, 150, 70],
-    [450, 120, 180, 80],
+  const radii: [number, number][] = [
+    [250, 110],
+    [200, 90],
+    [150, 70],
+    [110, 55],
   ];
-  for (const [cx, cz, rx, rz] of candidates) {
-    const pts = Array.from({ length: 64 }, (_, i) => {
-      const a = (i / 64) * Math.PI * 2;
-      return new THREE.Vector3(cx + Math.cos(a) * rx, 0, cz + Math.sin(a) * rz);
-    });
-    if (pts.every((p) => isWater(p.x, p.z) && isWater(p.x + 8, p.z) && isWater(p.x - 8, p.z))) return pts;
+  for (const [rx, rz] of radii) {
+    for (let cz = -700; cz <= 700; cz += 100)
+      for (let cx = -700; cx <= 700; cx += 100) {
+        const pts = Array.from({ length: 64 }, (_, i) => {
+          const a = (i / 64) * Math.PI * 2;
+          return new THREE.Vector3(cx + Math.cos(a) * rx, 0, cz + Math.sin(a) * rz);
+        });
+        if (pts.every((p) => isWater(p.x, p.z) && isWater(p.x + 8, p.z) && isWater(p.x - 8, p.z))) return pts;
+      }
   }
   return null;
 }
@@ -503,10 +506,10 @@ function boats(scene: THREE.Scene, rand: () => number, small: number) {
     const boat = motorboat(colors[i % colors.length]);
     scene.add(boat);
     let x = 0, z = 0;
-    for (let tries = 0; tries < 400; tries++) {
-      x = 150 + rand() * 500;
-      z = -100 + rand() * 350;
-      if (isWater(x, z)) break;
+    for (let tries = 0; tries < 800; tries++) {
+      x = (rand() - 0.5) * 1500;
+      z = (rand() - 0.5) * 1500;
+      if (isWater(x, z) && isWater(x + 15, z) && isWater(x, z + 15)) break;
     }
     let heading = rand() * Math.PI * 2;
     const speed = 3 + rand() * 5;

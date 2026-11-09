@@ -1,0 +1,14 @@
+{
+  "id": "lenzburg",
+  "name": "Schloss Lenzburg",
+  "origin": { "e": 2656381, "n": 1248760 },
+  "baseLevel": 400.0,
+  "grids": [
+    { "name": "core", "center": { "e": 2656381, "n": 1248760 }, "size": 2000, "step": 5 },
+    { "name": "mid", "center": { "e": 2656381, "n": 1248760 }, "size": 12000, "step": 40 },
+    { "name": "far", "center": { "e": 2656381, "n": 1248760 }, "size": 40000, "step": 250 }
+  ],
+  "trees": true,
+  "buildingSheets": ["1089-24", "1089-42", "1090-13", "1090-31"],
+  "stacBbox": "8.16,47.37,8.2,47.4"
+}

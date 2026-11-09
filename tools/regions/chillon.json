@@ -1,0 +1,14 @@
+{
+  "id": "chillon",
+  "name": "Château de Chillon",
+  "origin": { "e": 2560696, "n": 1140483 },
+  "baseLevel": 372.0,
+  "grids": [
+    { "name": "core", "center": { "e": 2560800, "n": 1140600 }, "size": 2000, "step": 5 },
+    { "name": "mid", "center": { "e": 2561500, "n": 1141000 }, "size": 12000, "step": 40 },
+    { "name": "far", "center": { "e": 2558000, "n": 1132000 }, "size": 60000, "step": 300 }
+  ],
+  "trees": true,
+  "buildingSheets": ["1264-23", "1264-24", "1264-32", "1264-41", "1264-42"],
+  "stacBbox": "6.85,46.37,7.0,46.46"
+}

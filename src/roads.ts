@@ -48,10 +48,22 @@ function resample(pts: [number, number][]) {
   return out;
 }
 
-/** Heights along a route: terrain on land, a straight deck between the banks over water. */
-function heights(pts: [number, number][], name: string | null) {
+/** Heights along a route: terrain on land, a straight deck between the banks over water or a valley. */
+function heights(pts: [number, number][], name: string | null, lakeBridges: boolean, wet: (x: number, z: number) => boolean) {
   const ground = pts.map(([x, z]) => terrainAt(x, z));
-  const water = pts.map(([x, z]) => isWater(x, z));
+  // swissTLM3D splits roads at bridges: a piece whose middle sags far below its ends spans a valley
+  const n = pts.length;
+  const length = (n - 1) * STEP;
+  const straight = Math.hypot(pts[n - 1][0] - pts[0][0], pts[n - 1][1] - pts[0][1]) > 0.9 * length;
+  // only short, straight pieces: a winding mountain road dipping into a gully stays on the ground
+  if (n > 4 && straight && length < 500) {
+    const line = (i: number) => ground[0] + ((ground[n - 1] - ground[0]) * i) / (n - 1);
+    let sag = 0;
+    for (let i = 0; i < n; i++) sag = Math.max(sag, line(i) - ground[i]);
+    if (sag > 6) return { y: ground.map((_, i) => line(i) + 0.3), bridged: ground.map((g, i) => line(i) - g > 2), hasDeck: true };
+  }
+  // lake crossings only where the region wants them (Luzern); rivers always get a bridge
+  const water = pts.map(([x, z]) => (lakeBridges && isWater(x, z)) || wet(x, z));
   // only real crossings get a deck: a path brushing the shore stays on the ground
   for (let i = 0; i < water.length; i++) {
     if (!water[i]) continue;
@@ -83,7 +95,7 @@ const mat4 = (x: number, y: number, z: number, yaw: number, sx = 1, sy = 1, sz =
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), new THREE.Vector3(sx, sy, sz));
 
 /** lampGlow: material of the lamp heads, lit at night by the time of day. */
-export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: ObstacleIndex, lampGlow: THREE.Material, bridges = true): Route[] {
+export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: ObstacleIndex, lampGlow: THREE.Material, bridges = true, wet: (x: number, z: number) => boolean = () => false): Route[] {
   const rails: THREE.Matrix4[] = [];
   const posts: THREE.Matrix4[] = [];
   const piers: THREE.Matrix4[] = [];
@@ -103,12 +115,10 @@ export function createRoads(scene: THREE.Scene, roads: RoadData[], obstacles: Ob
     const color = cls.surface === 'asphalt' && r.kind === 'car' ? SURFACE.asphalt : pedestrianZone ? (r.type === 10 || r.type === 20 ? SURFACE.pedestrian : SURFACE.lane) : SURFACE.path;
     const pts2 = resample(r.pts);
     if (pts2.length < 2) continue;
-    const h = heights(pts2, r.name);
-    const { y } = h;
-    // without bridges (mountain lakes) a path just follows the shore
-    const bridged = bridges ? h.bridged : h.bridged.map(() => false);
-    const hasDeck = bridges && h.hasDeck;
-    if (!bridges) for (let i = 0; i < y.length; i++) y[i] = Math.max(y[i], 0.2);
+    const h = heights(pts2, r.name, bridges, wet);
+    const { y, bridged, hasDeck } = h;
+    // without lake bridges (mountain lakes) a path just follows the shore, above the water
+    if (!bridges) for (let i = 0; i < y.length; i++) if (!bridged[i] && isWater(pts2[i][0], pts2[i][1])) y[i] = Math.max(y[i], 0.2);
     // bigger roads sit a hair higher, so crossings don't flicker
     const lift = cls.surface === 'asphalt' ? 0.22 : cls.surface === 'lane' ? 0.18 : 0.14;
     const half = cls.width / 2;

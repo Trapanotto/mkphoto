@@ -1,6 +1,6 @@
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home' | 'region';
+export type MenuAction = 'play' | 'newGame' | 'studio' | 'album' | 'quality' | 'mode' | 'reset' | 'home' | `region:${string}`;
 
 /** Title screen and pause menu. The game keeps rendering behind it. */
 export class MainMenu {
@@ -8,14 +8,16 @@ export class MainMenu {
   onAction?: (a: MenuAction) => void;
   private readonly el = $('menu');
   private readonly options = $('menu-options');
+  private readonly regions = $('menu-regions');
 
   constructor() {
     this.el.addEventListener('pointerdown', (e) => e.stopPropagation());
     for (const b of this.el.querySelectorAll<HTMLButtonElement>('button[data-action]')) {
       b.addEventListener('click', () => {
-        const action = b.dataset.action as MenuAction | 'options' | 'back';
-        if (action === 'options') this.showOptions(true);
-        else if (action === 'back') this.showOptions(false);
+        const action = b.dataset.action as MenuAction | 'options' | 'regions' | 'back';
+        if (action === 'options') this.showPanel('options');
+        else if (action === 'regions') this.showPanel('regions');
+        else if (action === 'back') this.showPanel('main');
         else this.onAction?.(action);
       });
     }
@@ -44,7 +46,7 @@ export class MainMenu {
   open() {
     this.isOpen = true;
     this.el.hidden = false;
-    this.showOptions(false);
+    this.showPanel('main');
     document.body.dataset.screen = 'menu';
   }
 
@@ -54,8 +56,16 @@ export class MainMenu {
     document.body.dataset.screen = 'game';
   }
 
-  private showOptions(on: boolean) {
-    this.options.hidden = !on;
-    $('menu-main').hidden = on;
+  /** Marks the region being played in the region list. */
+  setRegion(id: string) {
+    for (const b of this.regions.querySelectorAll<HTMLButtonElement>('button[data-action^="region:"]')) {
+      b.classList.toggle('current', b.dataset.action === `region:${id}`);
+    }
+  }
+
+  private showPanel(which: 'main' | 'options' | 'regions') {
+    this.options.hidden = which !== 'options';
+    this.regions.hidden = which !== 'regions';
+    $('menu-main').hidden = which !== 'main';
   }
 }

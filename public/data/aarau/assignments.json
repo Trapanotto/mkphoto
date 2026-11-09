@@ -1,0 +1,43 @@
+[
+  {
+    "id": "kettenbruecke-quer",
+    "client": "Stadt Aarau",
+    "contact": "Herr Hunziker",
+    "title": "Broschüre: Die Kettenbrücke",
+    "brief": "Die Brücke über die Aare von der Seite, quer und ganz im Bild, mit gerader Horizontlinie.",
+    "subjects": ["kettenbruecke"],
+    "orientation": "landscape",
+    "size": { "min": 0.12, "max": 0.85 },
+    "horizon": true,
+    "reward": 420,
+    "reputation": 18,
+    "level": 1
+  },
+  {
+    "id": "kettenbruecke-oben",
+    "client": "Aargauer Bauzeitung",
+    "contact": "Frau Meier",
+    "title": "Fachartikel: Brücke von oben",
+    "brief": "Die Brücke senkrecht von oben, mit der Aare darunter.",
+    "subjects": ["kettenbruecke"],
+    "size": { "min": 0.1, "max": 0.9 },
+    "gimbalMax": { "deg": -70, "label": "Kamera fast senkrecht nach unten" },
+    "reward": 400,
+    "reputation": 16,
+    "level": 1
+  },
+  {
+    "id": "kettenbruecke-abend",
+    "client": "Aarau Info",
+    "contact": "Herr Bircher",
+    "title": "Titelbild: Kettenbrücke im Abendlicht",
+    "brief": "Die Brücke im warmen Abendlicht, tief über der Aare, höchstens 15 m über dem Wasser.",
+    "subjects": ["kettenbruecke"],
+    "size": { "min": 0.08, "max": 0.8 },
+    "hours": { "from": 17, "to": 20.5, "label": "Abendlicht (17 bis 20:30 Uhr)" },
+    "altitudeMax": { "m": 15, "label": "Höchstens 15 m über der Aare" },
+    "reward": 500,
+    "reputation": 22,
+    "level": 2
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "lenzburg-huegel",
+    "client": "Museum Aargau",
+    "contact": "Frau Brunner",
+    "title": "Plakat: Schloss auf dem Hügel",
+    "brief": "Das Schloss auf seinem Hügel über der Altstadt, quer und mit gerader Horizontlinie.",
+    "subjects": ["lenzburg"],
+    "orientation": "landscape",
+    "size": { "min": 0.06, "max": 0.6 },
+    "horizon": true,
+    "reward": 440,
+    "reputation": 18,
+    "level": 1
+  },
+  {
+    "id": "lenzburg-hof",
+    "client": "Stiftung Schloss Lenzburg",
+    "contact": "Herr Widmer",
+    "title": "Plan: Schlossanlage von oben",
+    "brief": "Die ganze Anlage mit Hof und Garten, senkrecht von oben.",
+    "subjects": ["lenzburg"],
+    "size": { "min": 0.15, "max": 0.9 },
+    "gimbalMax": { "deg": -70, "label": "Kamera fast senkrecht nach unten" },
+    "reward": 420,
+    "reputation": 18,
+    "level": 1
+  },
+  {
+    "id": "lenzburg-morgen",
+    "client": "Aargauer Zeitung",
+    "contact": "Frau Keller",
+    "title": "Titelbild: Schloss im Morgenlicht",
+    "brief": "Das Schloss im ersten Licht des Tages, im Hochformat, mit Tele (mindestens 50 mm).",
+    "subjects": ["lenzburg"],
+    "orientation": "portrait",
+    "size": { "min": 0.08, "max": 0.75 },
+    "hours": { "from": 6, "to": 9, "label": "Morgenlicht (6 bis 9 Uhr)" },
+    "focalMin": { "mm": 50, "label": "Mindestens 50 mm" },
+    "reward": 520,
+    "reputation": 24,
+    "level": 2
+  }
+]

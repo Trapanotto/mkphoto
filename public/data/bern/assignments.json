@@ -1,0 +1,44 @@
+[
+  {
+    "id": "muenster-turm",
+    "client": "Bern Welcome",
+    "contact": "Frau Gerber",
+    "title": "Plakat: Der Münsterturm",
+    "brief": "Der höchste Kirchturm der Schweiz, im Hochformat und ganz im Bild. Gerne mit etwas Altstadt drumherum.",
+    "subjects": ["muenster"],
+    "orientation": "portrait",
+    "size": { "min": 0.1, "max": 0.8 },
+    "horizon": true,
+    "reward": 480,
+    "reputation": 20,
+    "level": 1
+  },
+  {
+    "id": "muenster-aare",
+    "client": "Berner Zeitung",
+    "contact": "Herr Zbinden",
+    "title": "Panorama: Münster über der Aare",
+    "brief": "Das Münster hoch über der Aareschlaufe, quer und mit gerader Horizontlinie. Tief über dem Fluss fliegen, höchstens 40 m über der Aare.",
+    "subjects": ["muenster"],
+    "orientation": "landscape",
+    "size": { "min": 0.05, "max": 0.5 },
+    "horizon": true,
+    "altitudeMax": { "m": 40, "label": "Höchstens 40 m über der Aare" },
+    "reward": 520,
+    "reputation": 22,
+    "level": 1
+  },
+  {
+    "id": "muenster-nacht",
+    "client": "Burgergemeinde Bern",
+    "contact": "Frau von Graffenried",
+    "title": "Jahresbericht: Münster bei Nacht",
+    "brief": "Das beleuchtete Münster in der Nacht, mit den Lichtern der Altstadt.",
+    "subjects": ["muenster"],
+    "size": { "min": 0.06, "max": 0.7 },
+    "hours": { "from": 21, "to": 5, "label": "Nachts (21 bis 5 Uhr)" },
+    "reward": 600,
+    "reputation": 26,
+    "level": 2
+  }
+]

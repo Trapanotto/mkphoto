@@ -145,8 +145,22 @@ export interface RoadData {
 /** Tree position and height: [x, z, height]. */
 export type TreeData = [number, number, number];
 
+export interface RailLine {
+  id: number;
+  type: number;
+  pts: [number, number][];
+}
+
+export interface RiverLine {
+  name: string | null;
+  type: number;
+  pts: [number, number][];
+}
+
 export interface TerrainData {
   meta: TerrainMeta;
+  rails: RailLine[];
+  rivers: RiverLine[];
   /** Most detailed first. */
   grids: Grid[];
   core: Grid;
@@ -175,13 +189,20 @@ export async function loadTerrain(baseUrl: string, rule: WaterRule): Promise<Ter
     ];
   }
   const meta = raw as TerrainMeta;
-  const [buffers, roads, trees] = await Promise.all([
+  // optional files: not every region has railways or rivers
+  const optional = <T>(name: string) =>
+    fetch(baseUrl + name)
+      .then((r) => (r.ok ? (r.json() as Promise<T[]>) : []))
+      .catch(() => [] as T[]);
+  const [buffers, roads, trees, rails, rivers] = await Promise.all([
     Promise.all(meta.grids.map((g) => get(g.file).then((r) => r.arrayBuffer()))),
     get('roads.json').then((r) => r.json() as Promise<RoadData[]>),
     get('trees.json').then((r) => r.json() as Promise<TreeData[]>),
+    optional<RailLine>('rails.json'),
+    optional<RiverLine>('rivers.json'),
   ]);
   grids = meta.grids.map((info, i) => toGrid(buffers[i], info));
   waterRule = rule;
   waterMask = buildWaterMask(grids[0], rule);
-  return { meta, grids, core: grids[0], far: grids[grids.length - 1], roads, trees };
+  return { meta, grids, core: grids[0], far: grids[grids.length - 1], roads, trees, rails, rivers };
 }
