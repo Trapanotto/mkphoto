@@ -88,10 +88,6 @@ function padTexture() {
   g.beginPath();
   g.arc(256, 256, 232, 0, Math.PI * 2);
   g.stroke();
-  g.lineWidth = 6;
-  g.beginPath();
-  g.arc(256, 256, 200, 0, Math.PI * 2);
-  g.stroke();
   // landing circle in the middle, where the drone stands
   g.strokeStyle = '#ffffff';
   g.lineWidth = 5;

@@ -111,9 +111,20 @@ async function start() {
 
   studio.onAccept = (job) => {
     game.activeJob = job.id;
+    // a job with a time window starts in that light: half an hour into the window
+    let timeNote = '';
+    if (job.hours) {
+      const { from, to } = job.hours;
+      const h = clock.hour;
+      const inside = from <= to ? h >= from && h < to : h >= from || h < to;
+      if (!inside) {
+        clock.hour = (from + 0.5) % 24;
+        timeNote = ` · Zeit auf ${clock.label} gestellt`;
+      }
+    }
     save();
     refreshJob();
-    showToast(`Auftrag angenommen: ${job.title}`);
+    showToast(`Auftrag angenommen: ${job.title}${timeNote}`, timeNote ? 4000 : 2800);
   };
   studio.onCancel = () => {
     game.activeJob = null;
